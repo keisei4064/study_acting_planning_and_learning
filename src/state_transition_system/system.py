@@ -47,6 +47,9 @@ class Plan:
     def cost(self) -> float:
         return sum([a.cost for a in self.actions])
 
+    def subplan(self, from_index: int, to_index: int) -> Plan:
+        return Plan(actions=self.actions[from_index:to_index])
+
     def prefix(self, to_index: int) -> Plan:
         return Plan(actions=self.actions[:to_index])
 
@@ -68,17 +71,17 @@ class Plan:
                 self.actions += other.actions
 
 
-def transition(s: State, a: Action) -> State | None:
+def transition_by_action(s: State, a: Action) -> State | None:
     if not a.is_applicable(s):
         return None
 
 
-def transtion(s: State, pi: Plan) -> State | None:
+def transition_by_plan(s: State, pi: Plan) -> State | None:
     new_s = s
     for a in pi.actions:
         if new_s is None:
             return None
-        new_s = transition(new_s, a)
+        new_s = transition_by_action(new_s, a)
 
     return new_s
 
@@ -96,7 +99,7 @@ class TransitiveClosure:
             s = states[-1]
             if not a.is_applicable(s):
                 return None
-            new_s = transition(s, a)
+            new_s = transition_by_action(s, a)
             assert new_s is not None
             states.append(new_s)
 
