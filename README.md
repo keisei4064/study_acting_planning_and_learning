@@ -1,3 +1,3 @@
 # study_acting_planning_and_learning
 
-プランニング（古典メイン）の勉強
+参考書: [Acting, Planning, and Learning](https://projects.laas.fr/planning/)
