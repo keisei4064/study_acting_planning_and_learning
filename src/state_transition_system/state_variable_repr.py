@@ -1,8 +1,6 @@
-import typing
-import dataclasses
-import enum
-from typing import TypeAlias, NewType
+from typing import NewType, TypeAlias
 import logging
+import pprint
 
 ObjectName = NewType("ObjectName", str)
 TypeName = NewType("TypeName", str)
@@ -44,16 +42,12 @@ class TypeHierarchy:
         return self._type_dict[typename]
 
 
-# @dataclasses.dataclass(frozen=True)
-# class RigidRelation:
-#     adjacentset: set[tuple[ObjectName, ObjectName]]
-#     at: set[tuple[ObjectName, ObjectName]]
+RigidRelationName = NewType("RigidRelationName", str)
+RigidRelations = dict[RigidRelationName, frozenset[tuple[ObjectName, ObjectName]]]
 
-
-# StateVariableName: TypeAlias = str
-
-# StateKey: TypeAlias = tuple[StateVariableName, tuple[ObjectName, ...]]
-# State: TypeAlias = dict[StateKey, ObjectName]
+StateVariableName = NewType("StateVariableName", str)
+StateKey = tuple[StateVariableName, tuple[ObjectName, ...]]
+State = dict[StateKey, ObjectName]
 
 if __name__ == "__main__":
     type_hierarchy = TypeHierarchy(
@@ -117,10 +111,36 @@ if __name__ == "__main__":
             ),
         }
     )
-    print(type_hierarchy._type_dict)
+
+    pprint.pprint(type_hierarchy._type_dict)
     print(f"Positions: {type_hierarchy.type_set(TypeName('Positions'))}")
     print(f"Containers: {type_hierarchy.type_set(TypeName('Containers'))}")
     print(f"Piles: {type_hierarchy.type_set(TypeName('Piles'))}")
     print(f"Symbols: {type_hierarchy.type_set(TypeName('Symbols'))}")
     print(f"Robots: {type_hierarchy.type_set(TypeName('Robots'))}")
     print(f"Docks: {type_hierarchy.type_set(TypeName('Docks'))}")
+
+    print("---")
+    # ---
+
+    rigid_relations: RigidRelations = {
+        RigidRelationName("adjacent"): frozenset(
+            {
+                (ObjectName("d1"), ObjectName("d2")),
+                (ObjectName("d2"), ObjectName("d1")),
+                (ObjectName("d2"), ObjectName("d3")),
+                (ObjectName("d3"), ObjectName("d2")),
+                (ObjectName("d3"), ObjectName("d1")),
+                (ObjectName("d1"), ObjectName("d3")),
+            }
+        ),
+        RigidRelationName("at"): frozenset(
+            {
+                (ObjectName("p1"), ObjectName("d1")),
+                (ObjectName("p2"), ObjectName("d2")),
+                (ObjectName("p3"), ObjectName("d2")),
+            }
+        ),
+    }
+    print(f"adjacent: {rigid_relations[RigidRelationName('adjacent')]}")
+    print(f"at: {rigid_relations[RigidRelationName('at')]}")
