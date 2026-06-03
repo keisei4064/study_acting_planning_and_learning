@@ -2,7 +2,8 @@ from typing import NewType, TypeAlias
 import logging
 import pprint
 
-ObjectName = NewType("ObjectName", str)
+ObjectName = NewType("ObjectName", str)  # TODO: ObjectConstant のほうが良いかも
+# TODO: ObjectVariable も必要かも
 TypeName = NewType("TypeName", str)
 
 
@@ -46,8 +47,8 @@ RigidRelationName = NewType("RigidRelationName", str)
 RigidRelations = dict[RigidRelationName, frozenset[tuple[ObjectName, ObjectName]]]
 
 StateVariableName = NewType("StateVariableName", str)
-StateKey = tuple[StateVariableName, tuple[ObjectName, ...]]
-State = dict[StateKey, ObjectName]
+StateVariableInstance = tuple[StateVariableName, tuple[ObjectName, ...]]
+StateVariableAssignments = dict[StateVariableInstance, ObjectName] # TODO: lifted assignments の表現
 
 if __name__ == "__main__":
     type_hierarchy = TypeHierarchy(
