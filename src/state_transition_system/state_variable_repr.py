@@ -1,4 +1,4 @@
-from typing import NewType, TypeAlias
+from typing import NewType
 import logging
 import pprint
 from dataclasses import dataclass
@@ -70,18 +70,17 @@ class RigidRelation:
 ObjectTerm = ObjectConstant | ObjectVariable
 
 
-@dataclass(frozen=True)
-class Substitution:
-    # 変数名と値
-    name: ObjectVariableName
-    value: ObjectConstant
-
-
 StateVariableName = NewType("StateVariableName", str)
 
 
 @dataclass(frozen=True)
 class StateVariableSchema:
+    """型としての表現
+
+    例: len(r) \in {'r1', 'r2', ...}
+
+    """
+
     name: StateVariableName
     args: tuple[ObjectVariable, ...]
     value_range: frozenset[ObjectConstant]
@@ -89,32 +88,50 @@ class StateVariableSchema:
 
 @dataclass(frozen=True)
 class StateVariableExpr:
-    name: StateVariableName
+    """StateVariable の実体．引数には ObjectVariable も許す（部分実体化）"""
+
+    schema: StateVariableSchema
     args: tuple[ObjectTerm, ...]
 
+    def __post_init__(self) -> None:
+        if len(self.args) != len(self.schema.args):
+            raise ValueError(
+                "Invalid state variable expression. "
+                f"The number of arguments does not match: "
+                f"{len(self.args)} != {len(self.schema.args)}"
+            )
 
-class StateVariables:
-    def __init__(self, schemas: list[StateVariableSchema]):
-        self._schema_dict: dict[StateVariableName, StateVariableSchema] = {}
-        self._variable_exprs: set[StateVariableExpr] = set()
-        for schema in schemas:
-            self._schema_dict[schema.name] = schema
+        for arg, schema_arg in zip(self.args, self.schema.args):
+            if isinstance(arg, ObjectVariable):
+                if not arg.value_range.issubset(schema_arg.value_range):
+                    raise ValueError(
+                        "Invalid state variable expression. "
+                        f"The value range of {arg} is not a subset of "
+                        f"{schema_arg.value_range}."
+                    )
+            else:
+                if arg not in schema_arg.value_range:
+                    raise ValueError(
+                        "Invalid state variable expression. "
+                        f"{arg} is not in {schema_arg.value_range}."
+                    )
 
-    def verify_and_register_expr(self, expr: StateVariableExpr) -> StateVariableExpr:
-        schema = self._schema_dict[expr.name]
-        assert len(expr.args) == len(schema.args)
-        for arg, arg_schema in zip(expr.args, schema.args):
-            assert arg in arg_schema.value_range
-
-        self._variable_exprs.add(expr)
-
-        return expr
+    def __str__(self) -> str:
+        args_str = ", ".join(str(arg) for arg in self.args)
+        return f"{self.schema.name}({args_str})"
 
 
-@dataclass(frozen=True)
-class StateVariableAssignment:
-    expr: StateVariableExpr
-    value: ObjectTerm
+# @dataclass(frozen=True)
+# class Substitution:
+#     # 変数名と値
+#     name: ObjectVariableName
+#     value: ObjectTerm
+
+
+# @dataclass(frozen=True)
+# class StateVariableAssignment:
+#     state_variable: StateVariableExpr
+#     value: ObjectTerm
 
 
 if __name__ == "__main__":
@@ -255,45 +272,95 @@ if __name__ == "__main__":
     docks = type_hierarchy.type_set(TypeName("Docks"))
     piles = type_hierarchy.type_set(TypeName("Piles"))
 
-    state_var_cargo = StateVariableSchema(
+    state_var_schema_cargo = StateVariableSchema(
         StateVariableName("cargo"),
         (obj_var_r,),
         containers | frozenset({nil}),
     )
-    state_var_loc = StateVariableSchema(
+    state_var_schema_loc = StateVariableSchema(
         StateVariableName("loc"),
         (obj_var_r,),
         docks,
     )
-    state_var_occupied = StateVariableSchema(
+    state_var_schema_occupied = StateVariableSchema(
         StateVariableName("occupied"),
         (obj_var_d,),
         frozenset({true, false}),
     )
-    state_var_pile = StateVariableSchema(
+    state_var_schema_pile = StateVariableSchema(
         StateVariableName("pile"),
         (obj_var_c,),
         piles | frozenset({nil}),
     )
-    state_var_pos = StateVariableSchema(
+    state_var_schema_pos = StateVariableSchema(
         StateVariableName("pos"),
         (obj_var_c,),
         robots | containers | frozenset({nil}),
     )
-    state_var_top = StateVariableSchema(
+    state_var_schema_top = StateVariableSchema(
         StateVariableName("top"),
         (obj_var_p,),
         containers | frozenset({nil}),
     )
 
     state_variables = [
-        state_var_cargo,
-        state_var_loc,
-        state_var_occupied,
-        state_var_pile,
-        state_var_pos,
-        state_var_top,
+        state_var_schema_cargo,
+        state_var_schema_loc,
+        state_var_schema_occupied,
+        state_var_schema_pile,
+        state_var_schema_pos,
+        state_var_schema_top,
     ]
 
     print("state_variables:")
     pprint.pprint(state_variables)
+
+    # ---
+
+    # Example 2.4 を表現
+
+    # NOTE: 暫定 State実装
+    State = dict[StateVariableExpr, ObjectConstant]
+
+    def sv(schema: StateVariableSchema, *args: ObjectTerm) -> StateVariableExpr:
+        return StateVariableExpr(schema, tuple(args))
+
+    r1 = ObjectConstant("r1")
+    r2 = ObjectConstant("r2")
+
+    d1 = ObjectConstant("d1")
+    d2 = ObjectConstant("d2")
+    d3 = ObjectConstant("d3")
+
+    c1 = ObjectConstant("c1")
+    c2 = ObjectConstant("c2")
+    c3 = ObjectConstant("c3")
+
+    p1 = ObjectConstant("p1")
+    p2 = ObjectConstant("p2")
+    p3 = ObjectConstant("p3")
+
+    s0: State = {
+        sv(state_var_schema_cargo, r1): nil,
+        sv(state_var_schema_cargo, r2): nil,
+        sv(state_var_schema_loc, r1): d1,
+        sv(state_var_schema_loc, r2): d2,
+        sv(state_var_schema_occupied, d1): true,
+        sv(state_var_schema_occupied, d2): true,
+        sv(state_var_schema_occupied, d3): false,
+        sv(state_var_schema_pile, c1): p1,
+        sv(state_var_schema_pile, c2): p1,
+        sv(state_var_schema_pile, c3): p2,
+        sv(state_var_schema_pos, c1): c2,
+        sv(state_var_schema_pos, c2): nil,
+        sv(state_var_schema_pos, c3): nil,
+        sv(state_var_schema_top, p1): c1,
+        sv(state_var_schema_top, p2): c3,
+        sv(state_var_schema_top, p3): nil,
+    }
+
+    print("---")
+    print("s0:")
+    # pprint.pprint(s0)
+    for expr, value in s0.items():
+        print(f"{expr} = {value}")
