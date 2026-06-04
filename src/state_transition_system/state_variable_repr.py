@@ -1,17 +1,18 @@
 from typing import NewType, TypeAlias
 import logging
 import pprint
+from dataclasses import dataclass
 
-ObjectName = NewType("ObjectName", str)  # TODO: ObjectConstant のほうが良いかも
-# TODO: ObjectVariable も必要かも
+ObjectConstant = NewType("ObjectConstant", str)
 TypeName = NewType("TypeName", str)
 
 
 class TypeHierarchy:
     def __init__(
-        self, type_tree_structure: dict[TypeName, tuple[set[TypeName], set[ObjectName]]]
+        self,
+        type_tree_structure: dict[TypeName, tuple[set[TypeName], set[ObjectConstant]]],
     ):
-        self._type_dict: dict[TypeName, frozenset[ObjectName]] = {}
+        self._type_dict: dict[TypeName, frozenset[ObjectConstant]] = {}
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
         unresolved = set(type_tree_structure.keys())
@@ -39,16 +40,82 @@ class TypeHierarchy:
                     % unresolved
                 )
 
-    def type_set(self, typename: TypeName) -> frozenset[ObjectName]:
+    def type_set(self, typename: TypeName) -> frozenset[ObjectConstant]:
         return self._type_dict[typename]
 
 
+ObjectVariableName = NewType("ObjectVariableName", str)
+
+
+@dataclass(frozen=True)
+class ObjectVariable:
+    # 変数名と値域
+    name: ObjectVariableName
+    value_range: frozenset[ObjectConstant]
+
+
 RigidRelationName = NewType("RigidRelationName", str)
-RigidRelations = dict[RigidRelationName, frozenset[tuple[ObjectName, ObjectName]]]
+
+
+@dataclass(frozen=True)
+class RigidRelation:
+    # 関係名と組の集合
+    name: RigidRelationName
+    pairs: frozenset[tuple[ObjectConstant, ObjectConstant]]
+
+
+# ---
+
+
+ObjectTerm = ObjectConstant | ObjectVariable
+
+
+@dataclass(frozen=True)
+class Substitution:
+    # 変数名と値
+    name: ObjectVariableName
+    value: ObjectConstant
+
 
 StateVariableName = NewType("StateVariableName", str)
-StateVariableInstance = tuple[StateVariableName, tuple[ObjectName, ...]]
-StateVariableAssignments = dict[StateVariableInstance, ObjectName] # TODO: lifted assignments の表現
+
+
+@dataclass(frozen=True)
+class StateVariableSchema:
+    name: StateVariableName
+    args: tuple[ObjectVariable, ...]
+    value_range: frozenset[ObjectConstant]
+
+
+@dataclass(frozen=True)
+class StateVariableExpr:
+    name: StateVariableName
+    args: tuple[ObjectTerm, ...]
+
+
+class StateVariables:
+    def __init__(self, schemas: list[StateVariableSchema]):
+        self._schema_dict: dict[StateVariableName, StateVariableSchema] = {}
+        self._variable_exprs: set[StateVariableExpr] = set()
+        for schema in schemas:
+            self._schema_dict[schema.name] = schema
+
+    def verify_and_register_expr(self, expr: StateVariableExpr) -> StateVariableExpr:
+        schema = self._schema_dict[expr.name]
+        assert len(expr.args) == len(schema.args)
+        for arg, arg_schema in zip(expr.args, schema.args):
+            assert arg in arg_schema.value_range
+
+        self._variable_exprs.add(expr)
+
+        return expr
+
+
+@dataclass(frozen=True)
+class StateVariableAssignment:
+    expr: StateVariableExpr
+    value: ObjectTerm
+
 
 if __name__ == "__main__":
     type_hierarchy = TypeHierarchy(
@@ -68,46 +135,46 @@ if __name__ == "__main__":
                     TypeName("Docks"),
                 },
                 {
-                    ObjectName("nil"),
+                    ObjectConstant("nil"),
                 },
             ),
             TypeName("Symbols"): (
                 set(),
                 {
-                    ObjectName("T"),
-                    ObjectName("F"),
-                    ObjectName("nil"),
+                    ObjectConstant("T"),
+                    ObjectConstant("F"),
+                    ObjectConstant("nil"),
                 },
             ),
             TypeName("Containers"): (
                 set(),
                 {
-                    ObjectName("c1"),
-                    ObjectName("c2"),
-                    ObjectName("c3"),
+                    ObjectConstant("c1"),
+                    ObjectConstant("c2"),
+                    ObjectConstant("c3"),
                 },
             ),
             TypeName("Piles"): (
                 set(),
                 {
-                    ObjectName("p1"),
-                    ObjectName("p2"),
-                    ObjectName("p3"),
+                    ObjectConstant("p1"),
+                    ObjectConstant("p2"),
+                    ObjectConstant("p3"),
                 },
             ),
             TypeName("Robots"): (
                 set(),
                 {
-                    ObjectName("r1"),
-                    ObjectName("r2"),
+                    ObjectConstant("r1"),
+                    ObjectConstant("r2"),
                 },
             ),
             TypeName("Docks"): (
                 set(),
                 {
-                    ObjectName("d1"),
-                    ObjectName("d2"),
-                    ObjectName("d3"),
+                    ObjectConstant("d1"),
+                    ObjectConstant("d2"),
+                    ObjectConstant("d3"),
                 },
             ),
         }
@@ -124,24 +191,109 @@ if __name__ == "__main__":
     print("---")
     # ---
 
-    rigid_relations: RigidRelations = {
-        RigidRelationName("adjacent"): frozenset(
+    rigid_rel_adjacent = RigidRelation(
+        RigidRelationName("adjacent"),
+        frozenset(
             {
-                (ObjectName("d1"), ObjectName("d2")),
-                (ObjectName("d2"), ObjectName("d1")),
-                (ObjectName("d2"), ObjectName("d3")),
-                (ObjectName("d3"), ObjectName("d2")),
-                (ObjectName("d3"), ObjectName("d1")),
-                (ObjectName("d1"), ObjectName("d3")),
+                (ObjectConstant("d1"), ObjectConstant("d2")),
+                (ObjectConstant("d2"), ObjectConstant("d1")),
+                (ObjectConstant("d2"), ObjectConstant("d3")),
+                (ObjectConstant("d3"), ObjectConstant("d2")),
+                (ObjectConstant("d3"), ObjectConstant("d1")),
+                (ObjectConstant("d1"), ObjectConstant("d3")),
             }
         ),
-        RigidRelationName("at"): frozenset(
+    )
+    rigid_rel_at = RigidRelation(
+        RigidRelationName("at"),
+        frozenset(
             {
-                (ObjectName("p1"), ObjectName("d1")),
-                (ObjectName("p2"), ObjectName("d2")),
-                (ObjectName("p3"), ObjectName("d2")),
+                (ObjectConstant("p1"), ObjectConstant("d1")),
+                (ObjectConstant("p2"), ObjectConstant("d2")),
+                (ObjectConstant("p3"), ObjectConstant("d2")),
             }
         ),
-    }
-    print(f"adjacent: {rigid_relations[RigidRelationName('adjacent')]}")
-    print(f"at: {rigid_relations[RigidRelationName('at')]}")
+    )
+
+    rigid_relations: set[RigidRelation] = {rigid_rel_adjacent, rigid_rel_at}
+    print("rigid_relations:")
+    pprint.pprint(rigid_relations)
+
+    print("---")
+    # ---
+
+    obj_var_r = ObjectVariable(
+        ObjectVariableName("r"),
+        type_hierarchy.type_set(TypeName("Robots")),
+    )
+    obj_var_d = ObjectVariable(
+        ObjectVariableName("d"),
+        type_hierarchy.type_set(TypeName("Docks")),
+    )
+    obj_var_c = ObjectVariable(
+        ObjectVariableName("c"),
+        type_hierarchy.type_set(TypeName("Containers")),
+    )
+    obj_var_p = ObjectVariable(
+        ObjectVariableName("p"),
+        type_hierarchy.type_set(TypeName("Piles")),
+    )
+    object_variables = [obj_var_r, obj_var_d, obj_var_c, obj_var_p]
+
+    print("object_variables:")
+    pprint.pprint(object_variables)
+
+    print("---")
+    # ---
+
+    nil = ObjectConstant("nil")
+    true = ObjectConstant("T")
+    false = ObjectConstant("F")
+
+    containers = type_hierarchy.type_set(TypeName("Containers"))
+    robots = type_hierarchy.type_set(TypeName("Robots"))
+    docks = type_hierarchy.type_set(TypeName("Docks"))
+    piles = type_hierarchy.type_set(TypeName("Piles"))
+
+    state_var_cargo = StateVariableSchema(
+        StateVariableName("cargo"),
+        (obj_var_r,),
+        containers | frozenset({nil}),
+    )
+    state_var_loc = StateVariableSchema(
+        StateVariableName("loc"),
+        (obj_var_r,),
+        docks,
+    )
+    state_var_occupied = StateVariableSchema(
+        StateVariableName("occupied"),
+        (obj_var_d,),
+        frozenset({true, false}),
+    )
+    state_var_pile = StateVariableSchema(
+        StateVariableName("pile"),
+        (obj_var_c,),
+        piles | frozenset({nil}),
+    )
+    state_var_pos = StateVariableSchema(
+        StateVariableName("pos"),
+        (obj_var_c,),
+        robots | containers | frozenset({nil}),
+    )
+    state_var_top = StateVariableSchema(
+        StateVariableName("top"),
+        (obj_var_p,),
+        containers | frozenset({nil}),
+    )
+
+    state_variables = [
+        state_var_cargo,
+        state_var_loc,
+        state_var_occupied,
+        state_var_pile,
+        state_var_pos,
+        state_var_top,
+    ]
+
+    print("state_variables:")
+    pprint.pprint(state_variables)
