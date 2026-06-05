@@ -49,7 +49,8 @@ class TypeHierarchy:
 ObjectVariableName = NewType("ObjectVariableName", str)
 
 
-@dataclass(frozen=True)
+# 変数の同一性は name ではなくインスタンス identity で判定する
+@dataclass(frozen=True, eq=False)
 class ObjectVariable:
     # 変数名と値域
     name: ObjectVariableName
@@ -166,6 +167,14 @@ class StateVariableExpr:
 class StateVariableAssignment:
     state_variable: StateVariableExpr
     value: ObjectTerm
+
+    def is_ground(self) -> bool:
+        is_args_ground = self.state_variable.is_ground()
+        is_value_ground = not isinstance(self.value, ObjectVariable)
+        return is_args_ground and is_value_ground
+
+    def is_lifed(self) -> bool:
+        return not self.is_ground()
 
 
 class State:
