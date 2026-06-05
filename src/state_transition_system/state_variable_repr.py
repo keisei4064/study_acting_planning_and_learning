@@ -1,7 +1,9 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
 from typing import NewType
 import logging
 import pprint
-from dataclasses import dataclass
 
 ObjectConstant = NewType("ObjectConstant", str)
 TypeName = NewType("TypeName", str)
@@ -58,10 +60,46 @@ RigidRelationName = NewType("RigidRelationName", str)
 
 
 @dataclass(frozen=True)
-class RigidRelation:
-    # 関係名と組の集合
+class RigidRelationSchema:
     name: RigidRelationName
-    pairs: frozenset[tuple[ObjectConstant, ObjectConstant]]
+    arg_ranges: tuple[frozenset[ObjectConstant], ...]
+
+
+class RigidRelations:
+    def __init__(
+        self,
+        rigid_relations: dict[RigidRelationSchema, set[tuple[ObjectConstant, ...]]],
+    ):
+        self._rigid_relations: dict[
+            RigidRelationSchema, frozenset[tuple[ObjectConstant, ...]]
+        ] = {}
+        self._schema_by_name: dict[RigidRelationName, RigidRelationSchema] = {}
+
+        for schema, instances in rigid_relations.items():
+            if schema.name in self._schema_by_name:
+                raise ValueError(
+                    f"The RigidRelation input is invalid. Duplicate relation name: {schema.name}"
+                )
+
+            for instance in instances:
+                if len(instance) != len(schema.arg_ranges):
+                    raise ValueError(
+                        f"The RigidRelation input is invalid. Schema: {schema}, Instance: {instance}"
+                    )
+                for arg, arg_range in zip(instance, schema.arg_ranges):
+                    if arg not in arg_range:
+                        raise ValueError(
+                            f"The RigidRelation input is invalid. Schema: {schema}, Instance: {instance}"
+                        )
+
+            self._schema_by_name[schema.name] = schema
+            self._rigid_relations[schema] = frozenset(instances)
+
+    def __str__(self) -> str:
+        res: str = ""
+        for schema, instances in self._rigid_relations.items():
+            res += f"{schema.name}({schema.arg_ranges}): {instances}\n"
+        return res
 
 
 # ---
@@ -120,18 +158,40 @@ class StateVariableExpr:
         args_str = ", ".join(str(arg) for arg in self.args)
         return f"{self.schema.name}({args_str})"
 
-
-# @dataclass(frozen=True)
-# class Substitution:
-#     # 変数名と値
-#     name: ObjectVariableName
-#     value: ObjectTerm
+    def is_ground(self) -> bool:
+        return all(not isinstance(arg, ObjectVariable) for arg in self.args)
 
 
-# @dataclass(frozen=True)
-# class StateVariableAssignment:
-#     state_variable: StateVariableExpr
-#     value: ObjectTerm
+@dataclass(frozen=True)
+class StateVariableAssignment:
+    state_variable: StateVariableExpr
+    value: ObjectTerm
+
+
+class State:
+    def __init__(
+        self,
+        state_variable_assignments: list[StateVariableAssignment],
+        rigid_relations: RigidRelations,
+    ):
+        """最初に登録するものが全て"""
+        self._state_variable_expr_to_value: dict[StateVariableExpr, ObjectTerm] = {}
+        for assignment in state_variable_assignments:
+            self._state_variable_expr_to_value[assignment.state_variable] = (
+                assignment.value
+            )
+
+        self._rigid_relations = rigid_relations
+
+    def __str__(self) -> str:
+        res: str = ""
+        res += "Rigid Relations:\n" + str(self._rigid_relations)
+
+        res += "\n"
+        res += "State Variables:\n"
+        for state_variable, value in self._state_variable_expr_to_value.items():
+            res += f"{state_variable.schema.name}{state_variable.args}: {value}\n"
+        return res
 
 
 if __name__ == "__main__":
@@ -208,33 +268,39 @@ if __name__ == "__main__":
     print("---")
     # ---
 
-    rigid_rel_adjacent = RigidRelation(
+    rigid_rel_adjacent = RigidRelationSchema(
         RigidRelationName("adjacent"),
-        frozenset(
-            {
+        (
+            type_hierarchy.type_set(TypeName("Docks")),
+            type_hierarchy.type_set(TypeName("Docks")),
+        ),
+    )
+    rigid_rel_at = RigidRelationSchema(
+        RigidRelationName("at"),
+        (
+            type_hierarchy.type_set(TypeName("Piles")),
+            type_hierarchy.type_set(TypeName("Docks")),
+        ),
+    )
+
+    rigid_relations = RigidRelations(
+        {
+            rigid_rel_adjacent: {
                 (ObjectConstant("d1"), ObjectConstant("d2")),
                 (ObjectConstant("d2"), ObjectConstant("d1")),
                 (ObjectConstant("d2"), ObjectConstant("d3")),
                 (ObjectConstant("d3"), ObjectConstant("d2")),
                 (ObjectConstant("d3"), ObjectConstant("d1")),
                 (ObjectConstant("d1"), ObjectConstant("d3")),
-            }
-        ),
-    )
-    rigid_rel_at = RigidRelation(
-        RigidRelationName("at"),
-        frozenset(
-            {
+            },
+            rigid_rel_at: {
                 (ObjectConstant("p1"), ObjectConstant("d1")),
                 (ObjectConstant("p2"), ObjectConstant("d2")),
                 (ObjectConstant("p3"), ObjectConstant("d2")),
-            }
-        ),
+            },
+        }
     )
-
-    rigid_relations: set[RigidRelation] = {rigid_rel_adjacent, rigid_rel_at}
-    print("rigid_relations:")
-    pprint.pprint(rigid_relations)
+    print("rigid_relations:\n", rigid_relations)
 
     print("---")
     # ---
@@ -316,14 +382,7 @@ if __name__ == "__main__":
     pprint.pprint(state_variables)
 
     # ---
-
     # Example 2.4 を表現
-
-    # NOTE: 暫定 State実装
-    State = dict[StateVariableExpr, ObjectConstant]
-
-    def sv(schema: StateVariableSchema, *args: ObjectTerm) -> StateVariableExpr:
-        return StateVariableExpr(schema, tuple(args))
 
     r1 = ObjectConstant("r1")
     r2 = ObjectConstant("r2")
@@ -340,27 +399,86 @@ if __name__ == "__main__":
     p2 = ObjectConstant("p2")
     p3 = ObjectConstant("p3")
 
-    s0: State = {
-        sv(state_var_schema_cargo, r1): nil,
-        sv(state_var_schema_cargo, r2): nil,
-        sv(state_var_schema_loc, r1): d1,
-        sv(state_var_schema_loc, r2): d2,
-        sv(state_var_schema_occupied, d1): true,
-        sv(state_var_schema_occupied, d2): true,
-        sv(state_var_schema_occupied, d3): false,
-        sv(state_var_schema_pile, c1): p1,
-        sv(state_var_schema_pile, c2): p1,
-        sv(state_var_schema_pile, c3): p2,
-        sv(state_var_schema_pos, c1): c2,
-        sv(state_var_schema_pos, c2): nil,
-        sv(state_var_schema_pos, c3): nil,
-        sv(state_var_schema_top, p1): c1,
-        sv(state_var_schema_top, p2): c3,
-        sv(state_var_schema_top, p3): nil,
-    }
+    s0 = State(
+        [
+            StateVariableAssignment(
+                StateVariableExpr(state_var_schema_cargo, (r1,)),
+                nil,
+            ),
+            StateVariableAssignment(
+                StateVariableExpr(state_var_schema_cargo, (r2,)),
+                nil,
+            ),
+            StateVariableAssignment(
+                StateVariableExpr(state_var_schema_loc, (r1,)),
+                d1,
+            ),
+            StateVariableAssignment(
+                StateVariableExpr(state_var_schema_loc, (r2,)),
+                d2,
+            ),
+            StateVariableAssignment(
+                StateVariableExpr(state_var_schema_occupied, (d1,)),
+                true,
+            ),
+            StateVariableAssignment(
+                StateVariableExpr(state_var_schema_occupied, (d2,)),
+                true,
+            ),
+            StateVariableAssignment(
+                StateVariableExpr(state_var_schema_occupied, (d3,)),
+                false,
+            ),
+            StateVariableAssignment(
+                StateVariableExpr(state_var_schema_pile, (c1,)),
+                p1,
+            ),
+            StateVariableAssignment(
+                StateVariableExpr(state_var_schema_pile, (c2,)),
+                p1,
+            ),
+            StateVariableAssignment(
+                StateVariableExpr(state_var_schema_pile, (c3,)),
+                p2,
+            ),
+            StateVariableAssignment(
+                StateVariableExpr(state_var_schema_pos, (c1,)),
+                c2,
+            ),
+            StateVariableAssignment(
+                StateVariableExpr(state_var_schema_pos, (c2,)),
+                nil,
+            ),
+            StateVariableAssignment(
+                StateVariableExpr(state_var_schema_pos, (c3,)),
+                nil,
+            ),
+            StateVariableAssignment(
+                StateVariableExpr(state_var_schema_top, (p1,)),
+                c1,
+            ),
+            StateVariableAssignment(
+                StateVariableExpr(state_var_schema_top, (p2,)),
+                c3,
+            ),
+            StateVariableAssignment(
+                StateVariableExpr(state_var_schema_top, (p3,)),
+                nil,
+            ),
+        ],
+        rigid_relations,
+    )
 
     print("---")
     print("s0:")
+    print(s0)
     # pprint.pprint(s0)
-    for expr, value in s0.items():
-        print(f"{expr} = {value}")
+    # for expr, value in s0.items():
+    #     print(f"{expr} = {value}")
+
+    print("---")
+    # ---
+
+    ungrounded_loc = StateVariableExpr(state_var_schema_loc, (obj_var_r,))
+    print(f"ungrounded_loc: {ungrounded_loc}")
+    # ---
