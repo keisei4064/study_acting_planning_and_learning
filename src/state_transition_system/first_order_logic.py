@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import cast
 import state_transition_system.state_variable_repr as stssvr
 
 
@@ -51,43 +52,114 @@ class RigidRelationAssertion(stssvr.InstantiableExpression):
         args_str = ", ".join(str(arg) for arg in self.args)
         return f"{self.rigid_relation_schema.name}({args_str})"
 
+    def as_ground_args(self) -> tuple[stssvr.ObjectConstant, ...]:
+        if not stssvr.is_ground(self):
+            raise ValueError(
+                f"The unground rigid relation assertion {self} cannot be converted to ground arguments."
+            )
 
-@dataclass
-class LiteralExpr(stssvr.InstantiableExpression):
-    """原子式 (atom) またはその否定"""
+        return cast(tuple[stssvr.ObjectConstant, ...], self.args)
 
-    atom: stssvr.StateVariableAssignment | RigidRelationAssertion
+
+@dataclass(frozen=True)
+class StateVariableLiteralExpr(stssvr.InstantiableExpression):
+    """StateVariableAssignment を atom に持つ literal"""
+
+    atom: stssvr.StateVariableAssignment
     negated: bool = False
 
     def __str__(self) -> str:
         """否定の記号は '¬'"""
-        match self.atom:
-            case stssvr.StateVariableAssignment(
-                state_variable=state_variable, value=value
-            ):
-                args_str = ", ".join(stssvr.object_term_to_str(arg) for arg in state_variable.args)
-                value_str = stssvr.object_term_to_str(value)
-                atom_str = (
-                    f"{state_variable.schema.name}({args_str}) = {value_str}"
-                )
-            case RigidRelationAssertion(
-                rigid_relation_schema=rigid_relation_schema, args=args
-            ):
-                args_str = ", ".join(stssvr.object_term_to_str(arg) for arg in args)
-                atom_str = f"{rigid_relation_schema.name}({args_str})"
-            case _:
-                atom_str = str(self.atom)
+        args_str = ", ".join(
+            stssvr.object_term_to_str(arg) for arg in self.atom.state_variable.args
+        )
+        value_str = stssvr.object_term_to_str(self.atom.value)
+        atom_str = f"{self.atom.state_variable.schema.name}({args_str}) = {value_str}"
         return f"{'¬' if self.negated else ''}{atom_str}"
 
     def _object_variables(self) -> frozenset[stssvr.ObjectVariable]:
         return self.atom._object_variables()
 
-    def _substitute_terms(self, mapping: stssvr.TermSubstitutionMap) -> LiteralExpr:
-        return LiteralExpr(self.atom._substitute_terms(mapping), self.negated)
+    def _substitute_terms(
+        self, mapping: stssvr.TermSubstitutionMap
+    ) -> StateVariableLiteralExpr:
+        return StateVariableLiteralExpr(
+            self.atom._substitute_terms(mapping), self.negated
+        )
 
-    # def eval(self, state: svrepr.State) -> bool:
-    #     match self.expr:
-    #         case svrepr.StateVariableAssignment(state_variable, value):
-    #             return state._state_variable_expr_to_value[state_variable] == value
-    #         case RigidRelationAssertion(RigidRelationSchema, args):
-    #             return args in state._rigid_relations[RigidRelationSchema]
+    def evaluate(self, state: stssvr.StateVariableState) -> bool:
+        if not stssvr.is_ground(self.atom):
+            raise ValueError(
+                f"The unground state variable expression {self.atom} cannot be evaluated."
+            )
+
+        if not state.has_state_variable(self.atom.state_variable):
+            raise ValueError(
+                f"The state variable {self.atom.state_variable} is not in the state."
+            )
+
+        if self.negated:
+            return state.get_value(self.atom.state_variable) != self.atom.value
+        else:
+            return state.get_value(self.atom.state_variable) == self.atom.value
+
+
+@dataclass(frozen=True)
+class RigidRelationLiteralExpr(stssvr.InstantiableExpression):
+    """RigidRelationAssertion を atom に持つ literal"""
+
+    atom: RigidRelationAssertion
+    negated: bool = False
+
+    def __str__(self) -> str:
+        """否定の記号は '¬'"""
+        args_str = ", ".join(stssvr.object_term_to_str(arg) for arg in self.atom.args)
+        atom_str = f"{self.atom.rigid_relation_schema.name}({args_str})"
+        return f"{'¬' if self.negated else ''}{atom_str}"
+
+    def _object_variables(self) -> frozenset[stssvr.ObjectVariable]:
+        return self.atom._object_variables()
+
+    def _substitute_terms(
+        self, mapping: stssvr.TermSubstitutionMap
+    ) -> RigidRelationLiteralExpr:
+        return RigidRelationLiteralExpr(
+            self.atom._substitute_terms(mapping), self.negated
+        )
+
+    def evaluate(self, rigid_relations: stssvr.RigidRelations) -> bool:
+        if not stssvr.is_ground(self.atom):
+            raise ValueError(
+                f"The unground rigid relation expression {self.atom} cannot be evaluated."
+            )
+
+        if not rigid_relations.has_rigid_relation(self.atom.rigid_relation_schema):
+            raise ValueError(
+                f"The rigid relation {self.atom.rigid_relation_schema} is not in the rigid relations."
+            )
+
+        if self.negated:
+            return not rigid_relations.is_contained_in(
+                self.atom.rigid_relation_schema, self.atom.as_ground_args()
+            )
+        else:
+            return rigid_relations.is_contained_in(
+                self.atom.rigid_relation_schema, self.atom.as_ground_args()
+            )
+
+
+LiteralExpr = StateVariableLiteralExpr | RigidRelationLiteralExpr
+"""Literal : 原子式 (atom) またはその否定"""
+
+
+def evaluate_literal_expr(
+    literal: LiteralExpr,
+    state: stssvr.StateVariableState,
+    rigid_relations: stssvr.RigidRelations,
+) -> bool:
+    """literal を評価する"""
+    return (
+        literal.evaluate(state)
+        if isinstance(literal, StateVariableLiteralExpr)
+        else literal.evaluate(rigid_relations)
+    )

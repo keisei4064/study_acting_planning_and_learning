@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import NewType, Protocol, Self, TypeVar
+from typing import NewType, Protocol, Self, TypeVar, cast
 from typing import Mapping
 import logging
 import pprint
@@ -171,6 +171,14 @@ class RigidRelations:
             res += f"{schema.name}({schema.arg_ranges}): {instances}\n"
         return res
 
+    def has_rigid_relation(self, schema: RigidRelationSchema) -> bool:
+        return schema in self._rigid_relations
+
+    def is_contained_in(
+        self, schema: RigidRelationSchema, instance: tuple[ObjectConstant, ...]
+    ) -> bool:
+        return instance in self._rigid_relations[schema]
+
 
 # ---
 
@@ -293,26 +301,33 @@ class StateVariableState:
     def __init__(
         self,
         state_variable_assignments: list[StateVariableAssignment],
-        rigid_relations: RigidRelations,
     ):
         """最初に登録するものが全て"""
-        self._state_variable_expr_to_value: dict[StateVariableExpr, ObjectTerm] = {}
+        self._state_variable_expr_to_value: dict[StateVariableExpr, ObjectConstant] = {}
         for assignment in state_variable_assignments:
-            self._state_variable_expr_to_value[assignment.state_variable] = (
-                assignment.value
-            )
+            if not is_ground(assignment):
+                raise ValueError(
+                    f"The state variable assignments: {assignment} which are passed to StateVariableState must be ground."
+                )
 
-        self._rigid_relations = rigid_relations
+            self._state_variable_expr_to_value[assignment.state_variable] = cast(
+                ObjectConstant, assignment.value
+            )
 
     def __str__(self) -> str:
         res: str = ""
-        res += "Rigid Relations:\n" + str(self._rigid_relations)
-
-        res += "\n"
-        res += "State Variables:\n"
         for state_variable, value in self._state_variable_expr_to_value.items():
             res += f"{state_variable.schema.name}{state_variable.args}: {value}\n"
         return res
+
+    def has_state_variable(self, state_variable: StateVariableExpr) -> bool:
+        return state_variable in self._state_variable_expr_to_value
+
+    def get_value(self, state_variable: StateVariableExpr) -> ObjectConstant:
+        return self._state_variable_expr_to_value[state_variable]
+
+    def set_value(self, state_variable: StateVariableExpr, value: ObjectConstant):
+        self._state_variable_expr_to_value[state_variable] = value
 
 
 # ===
@@ -590,7 +605,6 @@ if __name__ == "__main__":
                 nil,
             ),
         ],
-        rigid_relations,
     )
 
     print("---")
