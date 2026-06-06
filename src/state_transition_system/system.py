@@ -2,43 +2,38 @@ from __future__ import annotations
 
 import dataclasses
 import abc
+from typing import Generic, TypeVar
 
 
-class State:
-    pass
+StateT = TypeVar("StateT")
+"""状態を表す型変数"""
 
 
-class Action(abc.ABC):
+class Action(abc.ABC, Generic[StateT]):
     @abc.abstractmethod
-    def is_applicable(self, s: State) -> bool:
-        pass
+    def is_applicable(self, s: StateT) -> bool: ...
 
     @abc.abstractmethod
-    def transition(self, s: State) -> State | None:
-        pass
+    def transition(self, s: StateT) -> StateT | None: ...
 
     @property
     def cost(self) -> float:
         return 1
 
 
-@dataclasses.dataclass
-class StateTransitionSystem:
-    """Σ = (𝑆, 𝐴, 𝛾, cost)"""
+# @dataclasses.dataclass
+# class StateTransitionSystem(Generic[StateT]):
+#     """Σ = (𝑆, 𝐴, 𝛾, cost)"""
 
-    states: tuple[State]
-    actions: tuple[Action]
-
-
-def applicable_actions(system: StateTransitionSystem, s: State):
-    return [a for a in system.actions if a.is_applicable(s)]
+#     states: tuple[StateT]
+#     actions: tuple[Action[StateT]]
 
 
 @dataclasses.dataclass
-class Plan:
+class Plan(Generic[StateT]):
     """𝜋"""
 
-    actions: list[Action]
+    actions: list[Action[StateT]]
 
     @property
     def length(self) -> int:
@@ -47,36 +42,38 @@ class Plan:
     def cost(self) -> float:
         return sum([a.cost for a in self.actions])
 
-    def subplan(self, from_index: int, to_index: int) -> Plan:
+    def subplan(self, from_index: int, to_index: int) -> Plan[StateT]:
         return Plan(actions=self.actions[from_index:to_index])
 
-    def prefix(self, to_index: int) -> Plan:
+    def prefix(self, to_index: int) -> Plan[StateT]:
         return Plan(actions=self.actions[:to_index])
 
-    def suffix(self, from_index: int) -> Plan:
+    def suffix(self, from_index: int) -> Plan[StateT]:
         return Plan(actions=self.actions[from_index:])
 
-    def concatnate_to_front(self, other: Action | Plan):
+    def concatenate_to_front(self, other: Action[StateT] | Plan[StateT]):
         match other:
             case Action():
                 self.actions.insert(0, other)
             case Plan():
                 self.actions = other.actions + self.actions
 
-    def concatnate_to_back(self, other: Action | Plan):
+    def concatenate_to_back(self, other: Action[StateT] | Plan[StateT]):
         match other:
             case Action():
-                self.actions.insert(-1, other)
+                self.actions.append(other)
             case Plan():
                 self.actions += other.actions
 
 
-def transition_by_action(s: State, a: Action) -> State | None:
+def transition_by_action(s: StateT, a: Action[StateT]) -> StateT | None:
     if not a.is_applicable(s):
         return None
 
+    return a.transition(s)
 
-def transition_by_plan(s: State, pi: Plan) -> State | None:
+
+def transition_by_plan(s: StateT, pi: Plan[StateT]) -> StateT | None:
     new_s = s
     for a in pi.actions:
         if new_s is None:
@@ -87,13 +84,15 @@ def transition_by_plan(s: State, pi: Plan) -> State | None:
 
 
 @dataclasses.dataclass
-class TransitiveClosure:
-    states: list[State]
-    pi: Plan
+class TransitiveClosure(Generic[StateT]):
+    states: list[StateT]
+    pi: Plan[StateT]
 
     @classmethod
-    def try_build(cls, s0: State, pi: Plan) -> TransitiveClosure | None:
-        states: list[State] = [s0]
+    def try_build(
+        cls, s0: StateT, pi: Plan[StateT]
+    ) -> TransitiveClosure[StateT] | None:
+        states: list[StateT] = [s0]
 
         for a in pi.actions:
             s = states[-1]

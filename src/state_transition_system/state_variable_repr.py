@@ -289,7 +289,7 @@ class StateVariableAssignment(InstantiableExpression):
 # ---
 
 
-class State:
+class StateVariableState:
     def __init__(
         self,
         state_variable_assignments: list[StateVariableAssignment],
@@ -523,7 +523,7 @@ if __name__ == "__main__":
     p2 = ObjectConstant("p2")
     p3 = ObjectConstant("p3")
 
-    s0 = State(
+    s0 = StateVariableState(
         [
             StateVariableAssignment(
                 StateVariableExpr(state_var_schema_cargo, (r1,)),
