@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import NewType, Protocol, Self, TypeVar, cast
+from typing import NewType, Protocol, Self, TypeVar
 from typing import Mapping
 import logging
 import pprint
@@ -67,6 +67,13 @@ class ObjectVariable:
 
 
 ObjectTerm = ObjectConstant | ObjectVariable
+
+
+def object_term_to_str(term: ObjectTerm) -> str:
+    if isinstance(term, ObjectVariable):
+        return term.name
+    else:
+        return str(term)
 
 
 TermSubstitutionMap = Mapping[ObjectVariable, ObjectTerm]
@@ -175,7 +182,7 @@ StateVariableName = NewType("StateVariableName", str)
 class StateVariableSchema:
     """StateVariable のスキーマ表現
 
-    Example: len(r) \in {'r1', 'r2', ...} の名前，引数の個数・値域，および変数自体の値域 を表現
+    Example: len(r) \\in {'r1', 'r2', ...} の名前，引数の個数・値域，および変数自体の値域 を表現
 
     """
 
@@ -219,11 +226,11 @@ class StateVariableExpr(InstantiableExpression):
                     )
 
     def __str__(self) -> str:
-        args_str = ", ".join(str(arg) for arg in self.args)
+        args_str = ", ".join(object_term_to_str(arg) for arg in self.args)
         return f"{self.schema.name}({args_str})"
 
-    def _object_variables(self) -> set[ObjectVariable]:
-        return set(arg for arg in self.args if isinstance(arg, ObjectVariable))
+    def _object_variables(self) -> frozenset[ObjectVariable]:
+        return frozenset(arg for arg in self.args if isinstance(arg, ObjectVariable))
 
     def _substitute_terms(self, mapping: TermSubstitutionMap) -> StateVariableExpr:
         new_args: list[ObjectTerm] = []
@@ -263,9 +270,9 @@ class StateVariableAssignment(InstantiableExpression):
                 )
 
     def __str__(self) -> str:
-        return f"{self.state_variable} = {self.value}"
+        return f"{self.state_variable} = {object_term_to_str(self.value)}"
 
-    def _object_variables(self) -> set[ObjectVariable]:
+    def _object_variables(self) -> frozenset[ObjectVariable]:
         if isinstance(self.value, ObjectVariable):
             return self.state_variable._object_variables().union({self.value})
         else:
@@ -277,6 +284,9 @@ class StateVariableAssignment(InstantiableExpression):
         new_value = substitute_object_term_if_mapped(self.value, mapping)
         new_state_variable = self.state_variable._substitute_terms(mapping)
         return StateVariableAssignment(new_state_variable, new_value)
+
+
+# ---
 
 
 class State:
@@ -303,6 +313,9 @@ class State:
         for state_variable, value in self._state_variable_expr_to_value.items():
             res += f"{state_variable.schema.name}{state_variable.args}: {value}\n"
         return res
+
+
+# ===
 
 
 if __name__ == "__main__":
