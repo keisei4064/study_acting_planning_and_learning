@@ -1,6 +1,11 @@
+from __future__ import annotations
+from typing import cast
+
 import state_transition_system.state_variable_repr as stssvr
 import state_transition_system.first_order_logic as stsfol
+import state_transition_system.system as stssystem
 import dataclasses
+import logging
 
 
 @dataclasses.dataclass(frozen=True)
@@ -42,14 +47,14 @@ class Effects:
 
 @dataclasses.dataclass(frozen=True)
 class Cost:
-    cost: float = 1
+    value: float = 1
 
     def __post_init__(self):
-        if self.cost < 0:
+        if self.value < 0:
             raise ValueError("Cost must be non-negative.")
 
     def __str__(self) -> str:
-        return f"cost: {self.cost}"
+        return f"cost: {self.value}"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -83,6 +88,129 @@ class ActionSchema:
         result += f"  {self.cost}"
         return result
 
+
+# ---
+
+
+@dataclasses.dataclass(frozen=True)
+class ActionExpr(stssvr.InstantiableExpression):
+    schema: ActionSchema
+    args: tuple[stssvr.ObjectTerm, ...]
+
+    def __str__(self) -> str:
+        args_str = ", ".join(stssvr.object_term_to_str(arg) for arg in self.args)
+        return f"{self.schema.head.name}({args_str})"
+
+    def __post_init__(self):
+        if len(self.args) != len(self.schema.head.parameters):
+            raise ValueError(
+                "Invalid action instance expression. "
+                f"The number of arguments does not match: "
+                f"{len(self.args)} != {len(self.schema.head.parameters)}"
+            )
+
+        for arg, schema_arg in zip(self.args, self.schema.head.parameters):
+            if isinstance(arg, stssvr.ObjectVariable):
+                if not arg.value_range.issubset(schema_arg.value_range):
+                    raise ValueError(
+                        "Invalid action instance expression. "
+                        f"The value range of {arg} is not a subset of "
+                        f"{schema_arg.value_range}."
+                    )
+            else:
+                if arg not in schema_arg.value_range:
+                    raise ValueError(
+                        "Invalid action instance expression. "
+                        f"{arg} is not in {schema_arg.value_range}."
+                    )
+
+    def _object_variables(self) -> frozenset[stssvr.ObjectVariable]:
+        return frozenset(
+            arg for arg in self.args if isinstance(arg, stssvr.ObjectVariable)
+        )
+
+    def _substitute_terms(self, mapping: stssvr.TermSubstitutionMap) -> ActionExpr:
+        return ActionExpr(
+            schema=self.schema,
+            args=tuple(
+                stssvr.substitute_object_term_if_mapped(arg, mapping)
+                for arg in self.args
+            ),
+        )
+
+
+# ---
+
+
+@dataclasses.dataclass(frozen=True)
+class GroundAction(stssystem.Action[stssvr.StateVariableState]):
+    expr: ActionExpr
+    state_preconditions: tuple[stsfol.StateVariableLiteralExpr, ...]
+
+    @classmethod
+    def try_build(
+        cls, expr: ActionExpr, rigid_relations: stssvr.RigidRelations
+    ) -> GroundAction | None:
+        # ActionExpr がそもそも ground かどうか
+        if not stssvr.is_ground(expr):
+            logging.warning(
+                f"Ground action cannot be built from non-ground action expression: {expr}"
+            )
+            return None
+
+        state_preconditions: list[stsfol.StateVariableLiteralExpr] = []
+
+        # RigidRelation Assertion はこの時点で処理
+        for precondition in expr.schema.preconditions.literals:
+            match precondition:
+                case stsfol.StateVariableLiteralExpr():
+                    state_preconditions.append(precondition)
+                case stsfol.RigidRelationLiteralExpr():
+                    if not precondition.evaluate(rigid_relations):
+                        logging.warning(
+                            f"Rigid relation precondition {precondition} is not satisfied."
+                        )
+                        return None
+                    continue
+
+        # 構築可能
+        return cls(expr=expr, state_preconditions=tuple(state_preconditions))
+
+    def is_applicable(self, s: stssvr.StateVariableState) -> bool:
+        return stssvr.is_ground(self.expr) and all(
+            precondition.evaluate(s) for precondition in self.state_preconditions
+        )
+
+    def transition(
+        self, s: stssvr.StateVariableState
+    ) -> stssvr.StateVariableState | None:
+        if not self.is_applicable(s):
+            return None
+
+        for effect in self.expr.schema.effects.effects:
+            s.set_value(
+                effect.state_variable, cast(stssvr.ObjectConstant, effect.value)
+            )
+
+        return s
+
+    @property
+    def cost(self) -> float:
+        return self.expr.schema.cost.value
+
+
+# ---
+
+# TODO
+# PlanningDomain / StateVariableDomain
+#   - type_hierarchy
+#   - object sets
+#   - state_variable_schemas
+#   - rigid_relation_schemas
+#   - rigid_relations
+#   - action_schemas
+
+# ---
 
 if __name__ == "__main__":
     import state_transition_system.dwr_domains as stsdwr_domains
@@ -162,7 +290,10 @@ if __name__ == "__main__":
         atom: stssvr.StateVariableAssignment | stsfol.RigidRelationAssertion,
         negated: bool = False,
     ) -> stsfol.LiteralExpr:
-        return stsfol.LiteralExpr(atom=atom, negated=negated)
+        if isinstance(atom, stssvr.StateVariableAssignment):
+            return stsfol.StateVariableLiteralExpr(atom, negated)
+        else:
+            return stsfol.RigidRelationLiteralExpr(atom, negated)
 
     # --- take(r, c, c', p, d) ---
 
@@ -253,8 +384,6 @@ if __name__ == "__main__":
         ),
     )
 
-    action_schemas = (take, put, move)
-
-    for action_schema in action_schemas:
+    for action_schema in (take, put, move):
         print(action_schema)
         print()
