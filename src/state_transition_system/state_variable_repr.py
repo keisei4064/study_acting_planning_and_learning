@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import NewType
+from typing import NewType, Protocol, Self, TypeVar, cast
+from typing import Mapping
 import logging
 import pprint
 
@@ -56,6 +57,67 @@ class ObjectVariable:
     name: ObjectVariableName
     value_range: frozenset[ObjectConstant]
 
+    def can_be_instantiated_by(self, value: ObjectTerm) -> bool:
+        if isinstance(value, ObjectVariable):
+            return value.value_range.issubset(self.value_range)
+        return value in self.value_range
+
+
+# ---
+
+
+ObjectTerm = ObjectConstant | ObjectVariable
+
+
+TermSubstitutionMap = Mapping[ObjectVariable, ObjectTerm]
+
+
+def substitute_object_term_if_mapped(
+    term: ObjectTerm, substitution_map: TermSubstitutionMap
+) -> ObjectTerm:
+    """Map に従って，ObjectTerm を置き換える"""
+    if isinstance(term, ObjectVariable) and term in substitution_map:
+        return substitution_map[term]
+    return term
+
+
+# ---
+
+
+class InstantiableExpression(Protocol):
+    """ObjectVariable を含みうる式表現"""
+
+    def _object_variables(self) -> frozenset[ObjectVariable]: ...
+
+    def _substitute_terms(self, mapping: TermSubstitutionMap) -> Self: ...
+
+
+InstantiableExpressionT = TypeVar(
+    "InstantiableExpressionT",
+    bound=InstantiableExpression,
+)
+
+
+def instantiate(
+    expr: InstantiableExpressionT,
+    mapping: TermSubstitutionMap,
+) -> InstantiableExpressionT:
+    """Def 2.5. Instantiating"""
+    for var, term in mapping.items():
+        if not var.can_be_instantiated_by(term):
+            raise ValueError(
+                f"The mapping input is invalid. Mapping: {mapping}, Variable: {var}, Term: {term}"
+            )
+
+    return expr._substitute_terms(mapping)
+
+
+def is_ground(expr: InstantiableExpression) -> bool:
+    return len(expr._object_variables()) == 0
+
+
+# ---
+
 
 RigidRelationName = NewType("RigidRelationName", str)
 
@@ -106,17 +168,14 @@ class RigidRelations:
 # ---
 
 
-ObjectTerm = ObjectConstant | ObjectVariable
-
-
 StateVariableName = NewType("StateVariableName", str)
 
 
 @dataclass(frozen=True)
 class StateVariableSchema:
-    """型としての表現
+    """StateVariable のスキーマ表現
 
-    例: len(r) \in {'r1', 'r2', ...}
+    Example: len(r) \in {'r1', 'r2', ...} の名前，引数の個数・値域，および変数自体の値域 を表現
 
     """
 
@@ -126,8 +185,12 @@ class StateVariableSchema:
 
 
 @dataclass(frozen=True)
-class StateVariableExpr:
-    """StateVariable の実体．引数には ObjectVariable も許す（部分実体化）"""
+class StateVariableExpr(InstantiableExpression):
+    """StateVariable の実体．引数には ObjectVariable も許す
+
+    Example: loc(r1) = d1 の `loc(r1)`部分のみを表現
+
+    """
 
     schema: StateVariableSchema
     args: tuple[ObjectTerm, ...]
@@ -159,22 +222,61 @@ class StateVariableExpr:
         args_str = ", ".join(str(arg) for arg in self.args)
         return f"{self.schema.name}({args_str})"
 
-    def is_ground(self) -> bool:
-        return all(not isinstance(arg, ObjectVariable) for arg in self.args)
+    def _object_variables(self) -> set[ObjectVariable]:
+        return set(arg for arg in self.args if isinstance(arg, ObjectVariable))
+
+    def _substitute_terms(self, mapping: TermSubstitutionMap) -> StateVariableExpr:
+        new_args: list[ObjectTerm] = []
+        for arg in self.args:
+            new_args.append(substitute_object_term_if_mapped(arg, mapping))
+
+        return StateVariableExpr(self.schema, tuple(new_args))
 
 
 @dataclass(frozen=True)
-class StateVariableAssignment:
+class StateVariableAssignment(InstantiableExpression):
+    """StateVariable に対する値の割り当てを表現
+
+    Example: loc(r1) = d1 の全体を表現
+
+    """
+
     state_variable: StateVariableExpr
     value: ObjectTerm
 
-    def is_ground(self) -> bool:
-        is_args_ground = self.state_variable.is_ground()
-        is_value_ground = not isinstance(self.value, ObjectVariable)
-        return is_args_ground and is_value_ground
+    def __post_init__(self) -> None:
+        # `= value` にあたるvalue がStateVariableSchema の値域と適合するかチェック
+        if isinstance(self.value, ObjectVariable):
+            if not self.value.value_range.issubset(
+                self.state_variable.schema.value_range
+            ):
+                raise ValueError(
+                    "Invalid state variable assignment. "
+                    f"The value range of {self.value} is not a subset of "
+                    f"{self.state_variable.schema.value_range}."
+                )
+        else:
+            if self.value not in self.state_variable.schema.value_range:
+                raise ValueError(
+                    "Invalid state variable assignment. "
+                    f"{self.value} is not in {self.state_variable.schema.value_range}."
+                )
 
-    def is_lifed(self) -> bool:
-        return not self.is_ground()
+    def __str__(self) -> str:
+        return f"{self.state_variable} = {self.value}"
+
+    def _object_variables(self) -> set[ObjectVariable]:
+        if isinstance(self.value, ObjectVariable):
+            return self.state_variable._object_variables().union({self.value})
+        else:
+            return self.state_variable._object_variables()
+
+    def _substitute_terms(
+        self, mapping: TermSubstitutionMap
+    ) -> StateVariableAssignment:
+        new_value = substitute_object_term_if_mapped(self.value, mapping)
+        new_state_variable = self.state_variable._substitute_terms(mapping)
+        return StateVariableAssignment(new_state_variable, new_value)
 
 
 class State:
