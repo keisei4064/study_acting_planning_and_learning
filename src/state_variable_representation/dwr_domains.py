@@ -1,165 +1,165 @@
-import state_variable_representation.state_variable_repr as stssvr
+import state_variable_representation.state_variable_repr as svrsvr
 import dataclasses
 from typing import Self
 
 
 @dataclasses.dataclass(frozen=True)
 class DWRDomain:
-    type_hierarchy: stssvr.TypeHierarchy
-    rigid_rel_adjacent: stssvr.RigidRelationSchema
-    rigid_rel_at: stssvr.RigidRelationSchema
-    rigid_relations: stssvr.RigidRelations
+    type_hierarchy: svrsvr.TypeHierarchy
+    rigid_rel_adjacent: svrsvr.RigidRelationSchema
+    rigid_rel_at: svrsvr.RigidRelationSchema
+    rigid_relations: svrsvr.RigidRelations
 
-    state_var_cargo: stssvr.StateVariableSchema
-    state_var_loc: stssvr.StateVariableSchema
-    state_var_occupied: stssvr.StateVariableSchema
-    state_var_pile: stssvr.StateVariableSchema
-    state_var_pos: stssvr.StateVariableSchema
-    state_var_top: stssvr.StateVariableSchema
+    state_var_cargo: svrsvr.StateVariableSchema
+    state_var_loc: svrsvr.StateVariableSchema
+    state_var_occupied: svrsvr.StateVariableSchema
+    state_var_pile: svrsvr.StateVariableSchema
+    state_var_pos: svrsvr.StateVariableSchema
+    state_var_top: svrsvr.StateVariableSchema
 
     @classmethod
     def build(cls) -> Self:
-        type_hierarchy = stssvr.TypeHierarchy(
+        type_hierarchy = svrsvr.TypeHierarchy(
             {
-                stssvr.TypeName("Objects"): (
+                svrsvr.TypeName("Objects"): (
                     {
-                        stssvr.TypeName("Positions"),
-                        stssvr.TypeName("Containers"),
-                        stssvr.TypeName("Piles"),
-                        stssvr.TypeName("Symbols"),
+                        svrsvr.TypeName("Positions"),
+                        svrsvr.TypeName("Containers"),
+                        svrsvr.TypeName("Piles"),
+                        svrsvr.TypeName("Symbols"),
                     },
                     set(),
                 ),
-                stssvr.TypeName("Positions"): (
+                svrsvr.TypeName("Positions"): (
                     {
-                        stssvr.TypeName("Robots"),
-                        stssvr.TypeName("Docks"),
+                        svrsvr.TypeName("Robots"),
+                        svrsvr.TypeName("Docks"),
                     },
                     {
-                        stssvr.ObjectConstant("nil"),
-                    },
-                ),
-                stssvr.TypeName("Symbols"): (
-                    set(),
-                    {
-                        stssvr.ObjectConstant("T"),
-                        stssvr.ObjectConstant("F"),
-                        stssvr.ObjectConstant("nil"),
+                        svrsvr.ObjectConstant("nil"),
                     },
                 ),
-                stssvr.TypeName("Containers"): (
+                svrsvr.TypeName("Symbols"): (
                     set(),
                     {
-                        stssvr.ObjectConstant("c1"),
-                        stssvr.ObjectConstant("c2"),
-                        stssvr.ObjectConstant("c3"),
+                        svrsvr.ObjectConstant("T"),
+                        svrsvr.ObjectConstant("F"),
+                        svrsvr.ObjectConstant("nil"),
                     },
                 ),
-                stssvr.TypeName("Piles"): (
+                svrsvr.TypeName("Containers"): (
                     set(),
                     {
-                        stssvr.ObjectConstant("p1"),
-                        stssvr.ObjectConstant("p2"),
-                        stssvr.ObjectConstant("p3"),
+                        svrsvr.ObjectConstant("c1"),
+                        svrsvr.ObjectConstant("c2"),
+                        svrsvr.ObjectConstant("c3"),
                     },
                 ),
-                stssvr.TypeName("Robots"): (
+                svrsvr.TypeName("Piles"): (
                     set(),
                     {
-                        stssvr.ObjectConstant("r1"),
-                        stssvr.ObjectConstant("r2"),
+                        svrsvr.ObjectConstant("p1"),
+                        svrsvr.ObjectConstant("p2"),
+                        svrsvr.ObjectConstant("p3"),
                     },
                 ),
-                stssvr.TypeName("Docks"): (
+                svrsvr.TypeName("Robots"): (
                     set(),
                     {
-                        stssvr.ObjectConstant("d1"),
-                        stssvr.ObjectConstant("d2"),
-                        stssvr.ObjectConstant("d3"),
+                        svrsvr.ObjectConstant("r1"),
+                        svrsvr.ObjectConstant("r2"),
+                    },
+                ),
+                svrsvr.TypeName("Docks"): (
+                    set(),
+                    {
+                        svrsvr.ObjectConstant("d1"),
+                        svrsvr.ObjectConstant("d2"),
+                        svrsvr.ObjectConstant("d3"),
                     },
                 ),
             }
         )
 
-        docks = type_hierarchy.type_set(stssvr.TypeName("Docks"))
-        piles = type_hierarchy.type_set(stssvr.TypeName("Piles"))
+        docks = type_hierarchy.type_set(svrsvr.TypeName("Docks"))
+        piles = type_hierarchy.type_set(svrsvr.TypeName("Piles"))
 
-        rigid_rel_adjacent = stssvr.RigidRelationSchema(
-            stssvr.RigidRelationName("adjacent"),
+        rigid_rel_adjacent = svrsvr.RigidRelationSchema(
+            svrsvr.RigidRelationName("adjacent"),
             (docks, docks),
         )
 
-        rigid_rel_at = stssvr.RigidRelationSchema(
-            stssvr.RigidRelationName("at"),
+        rigid_rel_at = svrsvr.RigidRelationSchema(
+            svrsvr.RigidRelationName("at"),
             (piles, docks),
         )
 
-        rigid_relations = stssvr.RigidRelations(
+        rigid_relations = svrsvr.RigidRelations(
             {
                 rigid_rel_adjacent: {
-                    (stssvr.ObjectConstant("d1"), stssvr.ObjectConstant("d2")),
-                    (stssvr.ObjectConstant("d2"), stssvr.ObjectConstant("d1")),
-                    (stssvr.ObjectConstant("d2"), stssvr.ObjectConstant("d3")),
-                    (stssvr.ObjectConstant("d3"), stssvr.ObjectConstant("d2")),
-                    (stssvr.ObjectConstant("d3"), stssvr.ObjectConstant("d1")),
-                    (stssvr.ObjectConstant("d1"), stssvr.ObjectConstant("d3")),
+                    (svrsvr.ObjectConstant("d1"), svrsvr.ObjectConstant("d2")),
+                    (svrsvr.ObjectConstant("d2"), svrsvr.ObjectConstant("d1")),
+                    (svrsvr.ObjectConstant("d2"), svrsvr.ObjectConstant("d3")),
+                    (svrsvr.ObjectConstant("d3"), svrsvr.ObjectConstant("d2")),
+                    (svrsvr.ObjectConstant("d3"), svrsvr.ObjectConstant("d1")),
+                    (svrsvr.ObjectConstant("d1"), svrsvr.ObjectConstant("d3")),
                 },
                 rigid_rel_at: {
-                    (stssvr.ObjectConstant("p1"), stssvr.ObjectConstant("d1")),
-                    (stssvr.ObjectConstant("p2"), stssvr.ObjectConstant("d2")),
-                    (stssvr.ObjectConstant("p3"), stssvr.ObjectConstant("d2")),
+                    (svrsvr.ObjectConstant("p1"), svrsvr.ObjectConstant("d1")),
+                    (svrsvr.ObjectConstant("p2"), svrsvr.ObjectConstant("d2")),
+                    (svrsvr.ObjectConstant("p3"), svrsvr.ObjectConstant("d2")),
                 },
             }
         )
 
-        nil = stssvr.ObjectConstant("nil")
-        true = stssvr.ObjectConstant("T")
-        false = stssvr.ObjectConstant("F")
+        nil = svrsvr.ObjectConstant("nil")
+        true = svrsvr.ObjectConstant("T")
+        false = svrsvr.ObjectConstant("F")
 
-        containers = type_hierarchy.type_set(stssvr.TypeName("Containers"))
-        robots = type_hierarchy.type_set(stssvr.TypeName("Robots"))
-        docks = type_hierarchy.type_set(stssvr.TypeName("Docks"))
-        piles = type_hierarchy.type_set(stssvr.TypeName("Piles"))
+        containers = type_hierarchy.type_set(svrsvr.TypeName("Containers"))
+        robots = type_hierarchy.type_set(svrsvr.TypeName("Robots"))
+        docks = type_hierarchy.type_set(svrsvr.TypeName("Docks"))
+        piles = type_hierarchy.type_set(svrsvr.TypeName("Piles"))
 
         containers_or_nil = containers | frozenset({nil})
 
-        schema_r = stssvr.ObjectVariable(stssvr.ObjectVariableName("r"), robots)
-        schema_d = stssvr.ObjectVariable(stssvr.ObjectVariableName("d"), docks)
-        schema_c = stssvr.ObjectVariable(stssvr.ObjectVariableName("c"), containers)
-        schema_p = stssvr.ObjectVariable(stssvr.ObjectVariableName("p"), piles)
+        schema_r = svrsvr.ObjectVariable(svrsvr.ObjectVariableName("r"), robots)
+        schema_d = svrsvr.ObjectVariable(svrsvr.ObjectVariableName("d"), docks)
+        schema_c = svrsvr.ObjectVariable(svrsvr.ObjectVariableName("c"), containers)
+        schema_p = svrsvr.ObjectVariable(svrsvr.ObjectVariableName("p"), piles)
 
-        state_var_cargo = stssvr.StateVariableSchema(
-            stssvr.StateVariableName("cargo"),
+        state_var_cargo = svrsvr.StateVariableSchema(
+            svrsvr.StateVariableName("cargo"),
             (schema_r,),
             containers_or_nil,
         )
 
-        state_var_loc = stssvr.StateVariableSchema(
-            stssvr.StateVariableName("loc"),
+        state_var_loc = svrsvr.StateVariableSchema(
+            svrsvr.StateVariableName("loc"),
             (schema_r,),
             docks,
         )
 
-        state_var_occupied = stssvr.StateVariableSchema(
-            stssvr.StateVariableName("occupied"),
+        state_var_occupied = svrsvr.StateVariableSchema(
+            svrsvr.StateVariableName("occupied"),
             (schema_d,),
             frozenset({true, false}),
         )
 
-        state_var_pile = stssvr.StateVariableSchema(
-            stssvr.StateVariableName("pile"),
+        state_var_pile = svrsvr.StateVariableSchema(
+            svrsvr.StateVariableName("pile"),
             (schema_c,),
             piles | frozenset({nil}),
         )
 
-        state_var_pos = stssvr.StateVariableSchema(
-            stssvr.StateVariableName("pos"),
+        state_var_pos = svrsvr.StateVariableSchema(
+            svrsvr.StateVariableName("pos"),
             (schema_c,),
             robots | containers | frozenset({nil}),
         )
 
-        state_var_top = stssvr.StateVariableSchema(
-            stssvr.StateVariableName("top"),
+        state_var_top = svrsvr.StateVariableSchema(
+            svrsvr.StateVariableName("top"),
             (schema_p,),
             containers_or_nil,
         )
@@ -178,29 +178,29 @@ class DWRDomain:
         )
 
     @property
-    def objects(self) -> frozenset[stssvr.ObjectConstant]:
-        return self.type_hierarchy.type_set(stssvr.TypeName("Objects"))
+    def objects(self) -> frozenset[svrsvr.ObjectConstant]:
+        return self.type_hierarchy.type_set(svrsvr.TypeName("Objects"))
 
     @property
-    def positions(self) -> frozenset[stssvr.ObjectConstant]:
-        return self.type_hierarchy.type_set(stssvr.TypeName("Positions"))
+    def positions(self) -> frozenset[svrsvr.ObjectConstant]:
+        return self.type_hierarchy.type_set(svrsvr.TypeName("Positions"))
 
     @property
-    def containers(self) -> frozenset[stssvr.ObjectConstant]:
-        return self.type_hierarchy.type_set(stssvr.TypeName("Containers"))
+    def containers(self) -> frozenset[svrsvr.ObjectConstant]:
+        return self.type_hierarchy.type_set(svrsvr.TypeName("Containers"))
 
     @property
-    def piles(self) -> frozenset[stssvr.ObjectConstant]:
-        return self.type_hierarchy.type_set(stssvr.TypeName("Piles"))
+    def piles(self) -> frozenset[svrsvr.ObjectConstant]:
+        return self.type_hierarchy.type_set(svrsvr.TypeName("Piles"))
 
     @property
-    def symbols(self) -> frozenset[stssvr.ObjectConstant]:
-        return self.type_hierarchy.type_set(stssvr.TypeName("Symbols"))
+    def symbols(self) -> frozenset[svrsvr.ObjectConstant]:
+        return self.type_hierarchy.type_set(svrsvr.TypeName("Symbols"))
 
     @property
-    def robots(self) -> frozenset[stssvr.ObjectConstant]:
-        return self.type_hierarchy.type_set(stssvr.TypeName("Robots"))
+    def robots(self) -> frozenset[svrsvr.ObjectConstant]:
+        return self.type_hierarchy.type_set(svrsvr.TypeName("Robots"))
 
     @property
-    def docks(self) -> frozenset[stssvr.ObjectConstant]:
-        return self.type_hierarchy.type_set(stssvr.TypeName("Docks"))
+    def docks(self) -> frozenset[svrsvr.ObjectConstant]:
+        return self.type_hierarchy.type_set(svrsvr.TypeName("Docks"))

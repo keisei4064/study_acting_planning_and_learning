@@ -1,4 +1,4 @@
-import state_transition_system.system as stssys
+import state_transition_system.state_transition_model as stsstm
 import state_transition_system.problem as stsprob
 from typing import TypeVar, Callable, TypeAlias
 import enum
@@ -8,7 +8,7 @@ DomainT = TypeVar("DomainT")
 
 
 StateObserver: TypeAlias = Callable[[DomainT], StateT]
-ActionPerformer: TypeAlias = Callable[[DomainT, stssys.Action[StateT]], None]
+ActionPerformer: TypeAlias = Callable[[DomainT, stsstm.Action[StateT]], None]
 
 
 class ExecutionResult(enum.Enum):
@@ -18,7 +18,7 @@ class ExecutionResult(enum.Enum):
 
 def run_plan(
     domain: DomainT,
-    pi: stssys.Plan[StateT],
+    pi: stsstm.Plan[StateT],
     goal: stsprob.GoalFormula[StateT],
     observer: StateObserver[DomainT, StateT],
     performer: ActionPerformer[DomainT, StateT],
@@ -39,7 +39,7 @@ def run_plan(
 
 def reactive_execution(
     domain: DomainT,
-    pi: stssys.Plan[StateT],
+    pi: stsstm.Plan[StateT],
     goal: stsprob.GoalFormula[StateT],
     observer: StateObserver[DomainT, StateT],
     performer: ActionPerformer[DomainT, StateT],
@@ -50,10 +50,10 @@ def reactive_execution(
         if goal(s):
             return ExecutionResult.SUCCESS
 
-        a: stssys.Action[StateT] | None = None
+        a: stsstm.Action[StateT] | None = None
         for i in range(pi.length, 0, -1):
             suffix_plan = pi.suffix(i - 1)
-            expected_state = stssys.transition_by_plan(s, suffix_plan)
+            expected_state = stsstm.transition_by_plan(s, suffix_plan)
             if expected_state is not None and goal(expected_state):
                 a = suffix_plan.actions[0]
                 break
@@ -64,7 +64,7 @@ def reactive_execution(
 
 
 LookAhead: TypeAlias = Callable[
-    [DomainT, StateT, stsprob.GoalFormula[StateT]], stssys.Plan[StateT] | None
+    [DomainT, StateT, stsprob.GoalFormula[StateT]], stsstm.Plan[StateT] | None
 ]
 
 
@@ -90,7 +90,7 @@ def run_lookahead(
 
 
 Simulator: TypeAlias = Callable[
-    [DomainT, StateT, stsprob.GoalFormula[StateT], stssys.Plan[StateT]], ExecutionResult
+    [DomainT, StateT, stsprob.GoalFormula[StateT], stsstm.Plan[StateT]], ExecutionResult
 ]
 
 
@@ -103,7 +103,7 @@ def run_lazy_lookahead(
     performer: ActionPerformer[DomainT, StateT],
 ):
     """Algorithm 2.4. : Run-Lazy-Lookahead (p.27)"""
-    pi = stssys.Plan[StateT]([])
+    pi = stsstm.Plan[StateT]([])
     while True:
         s = observer(domain)
         if goal(s):
