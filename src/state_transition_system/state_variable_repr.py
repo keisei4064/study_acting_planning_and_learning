@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, NewType, Protocol, Self, TypeVar, cast
+from typing import Iterable, Iterator, NewType, Protocol, Self, TypeVar, cast
 from typing import Mapping
 import logging
 import pprint
@@ -335,6 +335,9 @@ class StateVariableState:
         for state_variable, value in self._state_variable_expr_to_value.items():
             res += f"{state_variable.schema.name}{state_variable.args}: {value}\n"
         return res
+
+    def items(self) -> Iterator[tuple[StateVariableExpr, ObjectConstant]]:
+        return iter(self._state_variable_expr_to_value.items())
 
     def has_state_variable(self, state_variable: StateVariableExpr) -> bool:
         return state_variable in self._state_variable_expr_to_value

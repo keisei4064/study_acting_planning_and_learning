@@ -138,6 +138,12 @@ class ActionExpr(stssvr.InstantiableExpression):
             ),
         )
 
+    def get_parameter_substitution_map(self) -> stssvr.TermSubstitutionMap:
+        return {
+            parameter: arg
+            for parameter, arg in zip(self.schema.head.parameters, self.args)
+        }
+
 
 # ---
 
@@ -146,35 +152,73 @@ class ActionExpr(stssvr.InstantiableExpression):
 class GroundAction(stssystem.Action[stssvr.StateVariableState]):
     expr: ActionExpr
     state_preconditions: tuple[stsfol.StateVariableLiteralExpr, ...]
+    grounded_effects: tuple[stssvr.StateVariableAssignment, ...]
+
+    def __str__(self) -> str:
+        result = f"{self.expr}\n"
+        result += "  pre: "
+        result += ", ".join(
+            str(precondition) for precondition in self.state_preconditions
+        )
+        result += "\n"
+        result += "  eff: "
+        result += ", ".join(
+            f"{effect.state_variable} ← {stssvr.object_term_to_str(effect.value)}"
+            for effect in self.grounded_effects
+        )
+        result += "\n"
+        result += f"  cost: {self.cost}"
+        return result
 
     @classmethod
     def try_build(
         cls, expr: ActionExpr, rigid_relations: stssvr.RigidRelations
     ) -> GroundAction | None:
-        # ActionExpr がそもそも ground かどうか
+        # ActionExpr の引数が全て ground かどうか
         if not stssvr.is_ground(expr):
             logging.warning(
-                f"Ground action cannot be built from non-ground action expression: {expr}"
+                f"Action expression {expr} ({expr.schema}) is not ground. GroundAction is not built."
             )
             return None
 
-        state_preconditions: list[stsfol.StateVariableLiteralExpr] = []
+        # パラメータ -> 代入引数 のマッピング
+        substitution_map = expr.get_parameter_substitution_map()
 
-        # RigidRelation Assertion はこの時点で処理
+        # precondition を ground にする
+        state_preconditions: list[stsfol.StateVariableLiteralExpr] = []
         for precondition in expr.schema.preconditions.literals:
             match precondition:
                 case stsfol.StateVariableLiteralExpr():
-                    state_preconditions.append(precondition)
+                    state_preconditions.append(
+                        stssvr.instantiate(precondition, substitution_map)
+                    )
+                # RigidRelation Assertion はこの時点で処理
                 case stsfol.RigidRelationLiteralExpr():
-                    if not precondition.evaluate(rigid_relations):
+                    if not stssvr.instantiate(precondition, substitution_map).evaluate(
+                        rigid_relations
+                    ):
                         logging.warning(
                             f"Rigid relation precondition {precondition} is not satisfied."
                         )
                         return None
-                    continue
+
+        # effect を ground にする
+        grounded_effects: list[stssvr.StateVariableAssignment] = []
+        for effect in expr.schema.effects.effects:
+            grounded_effect = stssvr.instantiate(effect, substitution_map)
+            if not stssvr.is_ground(grounded_effect):
+                logging.warning(
+                    f"Effect {grounded_effect} is not ground. GroundAction is not built."
+                )
+                return None
+            grounded_effects.append(grounded_effect)
 
         # 構築可能
-        return cls(expr=expr, state_preconditions=tuple(state_preconditions))
+        return cls(
+            expr=expr,
+            state_preconditions=tuple(state_preconditions),
+            grounded_effects=tuple(grounded_effects),
+        )
 
     def is_applicable(self, s: stssvr.StateVariableState) -> bool:
         return stssvr.is_ground(self.expr) and all(
@@ -188,7 +232,7 @@ class GroundAction(stssystem.Action[stssvr.StateVariableState]):
         if not self.is_applicable(s):
             return None
 
-        return s.copy_with_assignments(self.expr.schema.effects.effects)
+        return s.copy_with_assignments(self.grounded_effects)
 
     @property
     def cost(self) -> float:
@@ -383,3 +427,80 @@ if __name__ == "__main__":
     for action_schema in (take, put, move):
         print(action_schema)
         print()
+
+    # Example 2.9.
+
+    # ---
+    print()
+    print("--- Example 2.9 ---")
+
+    # --- Example 2.4 の s0 ---
+
+    r1 = stssvr.ObjectConstant("r1")
+    r2 = stssvr.ObjectConstant("r2")
+
+    d1 = stssvr.ObjectConstant("d1")
+    d2 = stssvr.ObjectConstant("d2")
+    d3 = stssvr.ObjectConstant("d3")
+
+    c1 = stssvr.ObjectConstant("c1")
+    c2 = stssvr.ObjectConstant("c2")
+    c3 = stssvr.ObjectConstant("c3")
+
+    p1 = stssvr.ObjectConstant("p1")
+    p2 = stssvr.ObjectConstant("p2")
+    p3 = stssvr.ObjectConstant("p3")
+
+    s0 = stssvr.StateVariableState(
+        (
+            assign(state_var_cargo, (r1,), nil),
+            assign(state_var_cargo, (r2,), nil),
+            assign(state_var_loc, (r1,), d1),
+            assign(state_var_loc, (r2,), d2),
+            assign(state_var_occupied, (d1,), true),
+            assign(state_var_occupied, (d2,), true),
+            assign(state_var_occupied, (d3,), false),
+            assign(state_var_pile, (c1,), p1),
+            assign(state_var_pile, (c2,), p1),
+            assign(state_var_pile, (c3,), p2),
+            assign(state_var_pos, (c1,), c2),
+            assign(state_var_pos, (c2,), nil),
+            assign(state_var_pos, (c3,), nil),
+            assign(state_var_top, (p1,), c1),
+            assign(state_var_top, (p2,), c3),
+            assign(state_var_top, (p3,), nil),
+        )
+    )
+
+    # --- a1 = take(r1, c1, c2, p1, d1) ---
+
+    a1_expr = ActionExpr(
+        schema=take,
+        args=(r1, c1, c2, p1, d1),
+    )
+    a1 = GroundAction.try_build(
+        a1_expr,
+        dwr_domain.rigid_relations,
+    )
+    print("a1: ", a1)
+
+    assert a1 is not None
+    assert a1.is_applicable(s0)
+
+    # Action による状態遷移
+    s1 = a1.transition(s0)
+
+    assert s1 is not None
+
+    print()
+    print("a1 is applicable to s0:", a1.is_applicable(s0))
+    print("Changed state variables:")
+    for s0_state_variable_key, s0_state_variable_value in s0.items():
+        s1_state_variable_value = s1.get_value(s0_state_variable_key)
+
+        if s0_state_variable_value != s1_state_variable_value:
+            print(
+                f"  {s0_state_variable_key}: {s0_state_variable_value} → {s1_state_variable_value}"
+            )
+
+    print()
