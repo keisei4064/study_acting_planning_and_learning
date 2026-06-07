@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import cast
-import state_transition_system.state_variable_repr as stssvr
+import state_variable_representation.state_variable_repr as stssvr
 
 
 @dataclass(frozen=True)

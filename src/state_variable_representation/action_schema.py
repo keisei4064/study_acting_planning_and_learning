@@ -1,8 +1,8 @@
 from __future__ import annotations
 from typing import cast
 
-import state_transition_system.state_variable_repr as stssvr
-import state_transition_system.first_order_logic as stsfol
+import state_variable_representation.state_variable_repr as stssvr
+import state_variable_representation.first_order_logic as stsfol
 import state_transition_system.system as stssystem
 import dataclasses
 import logging
@@ -253,7 +253,7 @@ class GroundAction(stssystem.Action[stssvr.StateVariableState]):
 # ---
 
 if __name__ == "__main__":
-    import state_transition_system.dwr_domains as stsdwr_domains
+    import state_variable_representation.dwr_domains as stsdwr_domains
 
     dwr_domain = stsdwr_domains.DWRDomain.build()
 

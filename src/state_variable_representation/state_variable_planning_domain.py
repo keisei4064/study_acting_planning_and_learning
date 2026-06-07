@@ -1,7 +1,7 @@
 import dataclasses
-import state_transition_system.state_variable_repr as stssvr
-import state_transition_system.action_schema as stsact
-import state_transition_system.first_order_logic as stsfol
+import state_variable_representation.state_variable_repr as stssvr
+import state_variable_representation.action_schema as stsact
+import state_variable_representation.first_order_logic as stsfol
 import state_transition_system.problem as stsprob
 from typing import TypeAlias
 

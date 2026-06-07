@@ -1,4 +1,4 @@
-import state_transition_system.state_variable_repr as stssvr
+import state_variable_representation.state_variable_repr as stssvr
 import dataclasses
 from typing import Self
 

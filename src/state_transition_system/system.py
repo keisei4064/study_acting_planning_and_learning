@@ -21,14 +21,6 @@ class Action(abc.ABC, Generic[StateT]):
         return 1
 
 
-# @dataclasses.dataclass
-# class StateTransitionSystem(Generic[StateT]):
-#     """Σ = (𝑆, 𝐴, 𝛾, cost)"""
-
-#     states: tuple[StateT]
-#     actions: tuple[Action[StateT]]
-
-
 @dataclasses.dataclass
 class Plan(Generic[StateT]):
     """𝜋"""
