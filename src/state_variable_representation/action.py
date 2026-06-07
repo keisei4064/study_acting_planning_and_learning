@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import state_variable_representation.state_variable_repr as svrsvr
-import state_variable_representation.first_order_logic as svrfol
-import state_transition_system.state_transition_model as stsstm
+import state_variable_representation.model as svr_model
+import state_variable_representation.first_order_logic as svr_fol
+import state_transition_system.state_transition_model as sts_model
 import dataclasses
 import logging
 
@@ -12,7 +12,7 @@ class Head:
     """Def 2.7."""
 
     name: str
-    parameters: tuple[svrsvr.ObjectVariable, ...]
+    parameters: tuple[svr_model.ObjectVariable, ...]
 
     def __str__(self) -> str:
         args_str = ", ".join(arg.name for arg in self.parameters)
@@ -21,7 +21,7 @@ class Head:
 
 @dataclasses.dataclass(frozen=True)
 class Preconditions:
-    literals: tuple[svrfol.LiteralExpr, ...]
+    literals: tuple[svr_fol.LiteralExpr, ...]
 
     def __str__(self) -> str:
         result = "pre: "
@@ -31,14 +31,14 @@ class Preconditions:
 
 @dataclasses.dataclass(frozen=True)
 class Effects:
-    effects: tuple[svrsvr.StateVariableAssignment, ...]
+    effects: tuple[svr_model.StateVariableAssignment, ...]
 
     def __str__(self) -> str:
         result = "eff: "
         effect_strs: list[str] = []
         for effect in self.effects:
             state_variable_str = str(effect.state_variable)
-            value_str = svrsvr.object_term_to_str(effect.value)
+            value_str = svr_model.object_term_to_str(effect.value)
             effect_strs.append(f"{state_variable_str} ← {value_str}")
         result += ", ".join(effect_strs)
         return result
@@ -92,12 +92,12 @@ class ActionSchema:
 
 
 @dataclasses.dataclass(frozen=True)
-class ActionExpr(svrsvr.InstantiableExpression):
+class ActionExpr(svr_model.InstantiableExpression):
     schema: ActionSchema
-    args: tuple[svrsvr.ObjectTerm, ...]
+    args: tuple[svr_model.ObjectTerm, ...]
 
     def __str__(self) -> str:
-        args_str = ", ".join(svrsvr.object_term_to_str(arg) for arg in self.args)
+        args_str = ", ".join(svr_model.object_term_to_str(arg) for arg in self.args)
         return f"{self.schema.head.name}({args_str})"
 
     def __post_init__(self):
@@ -109,7 +109,7 @@ class ActionExpr(svrsvr.InstantiableExpression):
             )
 
         for arg, schema_arg in zip(self.args, self.schema.head.parameters):
-            if isinstance(arg, svrsvr.ObjectVariable):
+            if isinstance(arg, svr_model.ObjectVariable):
                 if not arg.value_range.issubset(schema_arg.value_range):
                     raise ValueError(
                         "Invalid action instance expression. "
@@ -123,21 +123,21 @@ class ActionExpr(svrsvr.InstantiableExpression):
                         f"{arg} is not in {schema_arg.value_range}."
                     )
 
-    def _object_variables(self) -> frozenset[svrsvr.ObjectVariable]:
+    def _object_variables(self) -> frozenset[svr_model.ObjectVariable]:
         return frozenset(
-            arg for arg in self.args if isinstance(arg, svrsvr.ObjectVariable)
+            arg for arg in self.args if isinstance(arg, svr_model.ObjectVariable)
         )
 
-    def _substitute_terms(self, mapping: svrsvr.TermSubstitutionMap) -> ActionExpr:
+    def _substitute_terms(self, mapping: svr_model.TermSubstitutionMap) -> ActionExpr:
         return ActionExpr(
             schema=self.schema,
             args=tuple(
-                svrsvr.substitute_object_term_if_mapped(arg, mapping)
+                svr_model.substitute_object_term_if_mapped(arg, mapping)
                 for arg in self.args
             ),
         )
 
-    def get_parameter_substitution_map(self) -> svrsvr.TermSubstitutionMap:
+    def get_parameter_substitution_map(self) -> svr_model.TermSubstitutionMap:
         return {
             parameter: arg
             for parameter, arg in zip(self.schema.head.parameters, self.args)
@@ -148,10 +148,10 @@ class ActionExpr(svrsvr.InstantiableExpression):
 
 
 @dataclasses.dataclass(frozen=True)
-class GroundAction(stsstm.Action[svrsvr.StateVariableState]):
+class GroundAction(sts_model.Action[svr_model.StateVariableState]):
     expr: ActionExpr
-    state_preconditions: tuple[svrfol.StateVariableLiteralExpr, ...]
-    grounded_effects: tuple[svrsvr.StateVariableAssignment, ...]
+    state_preconditions: tuple[svr_fol.StateVariableLiteralExpr, ...]
+    grounded_effects: tuple[svr_model.StateVariableAssignment, ...]
 
     def __str__(self) -> str:
         result = f"{self.expr}\n"
@@ -162,7 +162,7 @@ class GroundAction(stsstm.Action[svrsvr.StateVariableState]):
         result += "\n"
         result += "  eff: "
         result += ", ".join(
-            f"{effect.state_variable} ← {svrsvr.object_term_to_str(effect.value)}"
+            f"{effect.state_variable} ← {svr_model.object_term_to_str(effect.value)}"
             for effect in self.grounded_effects
         )
         result += "\n"
@@ -171,10 +171,10 @@ class GroundAction(stsstm.Action[svrsvr.StateVariableState]):
 
     @classmethod
     def try_build(
-        cls, expr: ActionExpr, rigid_relations: svrsvr.RigidRelations
+        cls, expr: ActionExpr, rigid_relations: svr_model.RigidRelations
     ) -> GroundAction | None:
         # ActionExpr の引数が全て ground かどうか
-        if not svrsvr.is_ground(expr):
+        if not svr_model.is_ground(expr):
             logging.warning(
                 f"Action expression {expr} ({expr.schema}) is not ground. GroundAction is not built."
             )
@@ -184,28 +184,28 @@ class GroundAction(stsstm.Action[svrsvr.StateVariableState]):
         substitution_map = expr.get_parameter_substitution_map()
 
         # precondition を ground にする
-        state_preconditions: list[svrfol.StateVariableLiteralExpr] = []
+        state_preconditions: list[svr_fol.StateVariableLiteralExpr] = []
         for precondition in expr.schema.preconditions.literals:
             match precondition:
-                case svrfol.StateVariableLiteralExpr():
+                case svr_fol.StateVariableLiteralExpr():
                     state_preconditions.append(
-                        svrsvr.instantiate(precondition, substitution_map)
+                        svr_model.instantiate(precondition, substitution_map)
                     )
                 # RigidRelation Assertion はこの時点で処理
-                case svrfol.RigidRelationLiteralExpr():
-                    if not svrsvr.instantiate(precondition, substitution_map).evaluate(
-                        rigid_relations
-                    ):
+                case svr_fol.RigidRelationLiteralExpr():
+                    if not svr_model.instantiate(
+                        precondition, substitution_map
+                    ).evaluate(rigid_relations):
                         logging.warning(
                             f"Rigid relation precondition {precondition} is not satisfied."
                         )
                         return None
 
         # effect を ground にする
-        grounded_effects: list[svrsvr.StateVariableAssignment] = []
+        grounded_effects: list[svr_model.StateVariableAssignment] = []
         for effect in expr.schema.effects.effects:
-            grounded_effect = svrsvr.instantiate(effect, substitution_map)
-            if not svrsvr.is_ground(grounded_effect):
+            grounded_effect = svr_model.instantiate(effect, substitution_map)
+            if not svr_model.is_ground(grounded_effect):
                 logging.warning(
                     f"Effect {grounded_effect} is not ground. GroundAction is not built."
                 )
@@ -219,14 +219,14 @@ class GroundAction(stsstm.Action[svrsvr.StateVariableState]):
             grounded_effects=tuple(grounded_effects),
         )
 
-    def is_applicable(self, s: svrsvr.StateVariableState) -> bool:
-        return svrsvr.is_ground(self.expr) and all(
+    def is_applicable(self, s: svr_model.StateVariableState) -> bool:
+        return svr_model.is_ground(self.expr) and all(
             precondition.evaluate(s) for precondition in self.state_preconditions
         )
 
     def transition(
-        self, s: svrsvr.StateVariableState
-    ) -> svrsvr.StateVariableState | None:
+        self, s: svr_model.StateVariableState
+    ) -> svr_model.StateVariableState | None:
         """p.20,21 式(2.15)"""
         if not self.is_applicable(s):
             return None
@@ -260,9 +260,9 @@ if __name__ == "__main__":
     print()
     print("--- Example 2.8 action schemas ---")
 
-    nil = svrsvr.ObjectConstant("nil")
-    true = svrsvr.ObjectConstant("T")
-    false = svrsvr.ObjectConstant("F")
+    nil = svr_model.ObjectConstant("nil")
+    true = svr_model.ObjectConstant("T")
+    false = svr_model.ObjectConstant("F")
 
     containers = dwr_domain.containers
     containers_or_nil = containers | frozenset({nil})
@@ -271,28 +271,28 @@ if __name__ == "__main__":
     robots = dwr_domain.robots
 
     # Action schema 用の object variables.
-    r = svrsvr.ObjectVariable(
-        svrsvr.ObjectVariableName("r"),
+    r = svr_model.ObjectVariable(
+        svr_model.ObjectVariableName("r"),
         robots,
     )
-    c = svrsvr.ObjectVariable(
-        svrsvr.ObjectVariableName("c"),
+    c = svr_model.ObjectVariable(
+        svr_model.ObjectVariableName("c"),
         containers,
     )
-    c_prime = svrsvr.ObjectVariable(
-        svrsvr.ObjectVariableName("c'"),
+    c_prime = svr_model.ObjectVariable(
+        svr_model.ObjectVariableName("c'"),
         containers_or_nil,
     )
-    d = svrsvr.ObjectVariable(
-        svrsvr.ObjectVariableName("d"),
+    d = svr_model.ObjectVariable(
+        svr_model.ObjectVariableName("d"),
         docks,
     )
-    d_prime = svrsvr.ObjectVariable(
-        svrsvr.ObjectVariableName("d'"),
+    d_prime = svr_model.ObjectVariable(
+        svr_model.ObjectVariableName("d'"),
         docks,
     )
-    p = svrsvr.ObjectVariable(
-        svrsvr.ObjectVariableName("p"),
+    p = svr_model.ObjectVariable(
+        svr_model.ObjectVariableName("p"),
         piles,
     )
 
@@ -306,23 +306,23 @@ if __name__ == "__main__":
     state_var_top = dwr_domain.state_var_top
 
     def assign(
-        schema: svrsvr.StateVariableSchema,
-        args: tuple[svrsvr.ObjectTerm, ...],
-        value: svrsvr.ObjectTerm,
-    ) -> svrsvr.StateVariableAssignment:
-        return svrsvr.StateVariableAssignment(
-            state_variable=svrsvr.StateVariableExpr(schema, args),
+        schema: svr_model.StateVariableSchema,
+        args: tuple[svr_model.ObjectTerm, ...],
+        value: svr_model.ObjectTerm,
+    ) -> svr_model.StateVariableAssignment:
+        return svr_model.StateVariableAssignment(
+            state_variable=svr_model.StateVariableExpr(schema, args),
             value=value,
         )
 
     def literal(
-        atom: svrsvr.StateVariableAssignment | svrfol.RigidRelationAssertion,
+        atom: svr_model.StateVariableAssignment | svr_fol.RigidRelationAssertion,
         negated: bool = False,
-    ) -> svrfol.LiteralExpr:
-        if isinstance(atom, svrsvr.StateVariableAssignment):
-            return svrfol.StateVariableLiteralExpr(atom, negated)
+    ) -> svr_fol.LiteralExpr:
+        if isinstance(atom, svr_model.StateVariableAssignment):
+            return svr_fol.StateVariableLiteralExpr(atom, negated)
         else:
-            return svrfol.RigidRelationLiteralExpr(atom, negated)
+            return svr_fol.RigidRelationLiteralExpr(atom, negated)
 
     # --- take(r, c, c', p, d) ---
 
@@ -334,7 +334,7 @@ if __name__ == "__main__":
         preconditions=Preconditions(
             literals=(
                 literal(
-                    svrfol.RigidRelationAssertion(
+                    svr_fol.RigidRelationAssertion(
                         dwr_domain.rigid_rel_at,
                         (p, d),
                     )
@@ -365,7 +365,7 @@ if __name__ == "__main__":
         preconditions=Preconditions(
             literals=(
                 literal(
-                    svrfol.RigidRelationAssertion(
+                    svr_fol.RigidRelationAssertion(
                         dwr_domain.rigid_rel_at,
                         (p, d),
                     )
@@ -395,7 +395,7 @@ if __name__ == "__main__":
         preconditions=Preconditions(
             literals=(
                 literal(
-                    svrfol.RigidRelationAssertion(
+                    svr_fol.RigidRelationAssertion(
                         dwr_domain.rigid_rel_adjacent,
                         (d, d_prime),
                     )
@@ -425,22 +425,22 @@ if __name__ == "__main__":
 
     # --- Example 2.4 の s0 ---
 
-    r1 = svrsvr.ObjectConstant("r1")
-    r2 = svrsvr.ObjectConstant("r2")
+    r1 = svr_model.ObjectConstant("r1")
+    r2 = svr_model.ObjectConstant("r2")
 
-    d1 = svrsvr.ObjectConstant("d1")
-    d2 = svrsvr.ObjectConstant("d2")
-    d3 = svrsvr.ObjectConstant("d3")
+    d1 = svr_model.ObjectConstant("d1")
+    d2 = svr_model.ObjectConstant("d2")
+    d3 = svr_model.ObjectConstant("d3")
 
-    c1 = svrsvr.ObjectConstant("c1")
-    c2 = svrsvr.ObjectConstant("c2")
-    c3 = svrsvr.ObjectConstant("c3")
+    c1 = svr_model.ObjectConstant("c1")
+    c2 = svr_model.ObjectConstant("c2")
+    c3 = svr_model.ObjectConstant("c3")
 
-    p1 = svrsvr.ObjectConstant("p1")
-    p2 = svrsvr.ObjectConstant("p2")
-    p3 = svrsvr.ObjectConstant("p3")
+    p1 = svr_model.ObjectConstant("p1")
+    p2 = svr_model.ObjectConstant("p2")
+    p3 = svr_model.ObjectConstant("p3")
 
-    s0 = svrsvr.StateVariableState(
+    s0 = svr_model.StateVariableState(
         (
             assign(state_var_cargo, (r1,), nil),
             assign(state_var_cargo, (r2,), nil),
