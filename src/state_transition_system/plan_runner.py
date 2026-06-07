@@ -23,7 +23,7 @@ def run_plan(
     observer: StateObserver[DomainT, StateT],
     performer: ActionPerformer[DomainT, StateT],
 ) -> ExecutionResult:
-    """Algorithm 2.1. (p.16)"""
+    """Algorithm 2.1. : Run-Plan (p.16)"""
     while True:
         s = observer(domain)
 
@@ -44,7 +44,7 @@ def reactive_execution(
     observer: StateObserver[DomainT, StateT],
     performer: ActionPerformer[DomainT, StateT],
 ) -> ExecutionResult:
-    """Algorithm 2.2. (p.26)"""
+    """Algorithm 2.2. : Reactive-Execution (p.26)"""
     while True:
         s = observer(domain)
         if goal(s):
@@ -60,4 +60,59 @@ def reactive_execution(
         if a is None:
             return ExecutionResult.FAILURE
 
+        performer(domain, a)
+
+
+LookAhead: TypeAlias = Callable[
+    [DomainT, StateT, stsprob.GoalFormula[StateT]], stssys.Plan[StateT] | None
+]
+
+
+def run_lookahead(
+    domain: DomainT,
+    goal: stsprob.GoalFormula[StateT],
+    look_ahead: LookAhead[DomainT, StateT],
+    observer: StateObserver[DomainT, StateT],
+    performer: ActionPerformer[DomainT, StateT],
+):
+    """Algorithm 2.3. : Run-Lookahead (p.26)"""
+    while True:
+        s = observer(domain)
+        if goal(s):
+            return ExecutionResult.SUCCESS
+
+        pi = look_ahead(domain, s, goal)
+        if pi is None or pi.length == 0:
+            return ExecutionResult.FAILURE
+
+        a = pi.actions.pop(0)
+        performer(domain, a)
+
+
+Simulator: TypeAlias = Callable[
+    [DomainT, StateT, stsprob.GoalFormula[StateT], stssys.Plan[StateT]], ExecutionResult
+]
+
+
+def run_lazy_lookahead(
+    domain: DomainT,
+    goal: stsprob.GoalFormula[StateT],
+    look_ahead: LookAhead[DomainT, StateT],
+    simulator: Simulator[DomainT, StateT],
+    observer: StateObserver[DomainT, StateT],
+    performer: ActionPerformer[DomainT, StateT],
+):
+    """Algorithm 2.4. : Run-Lazy-Lookahead (p.27)"""
+    pi = stssys.Plan[StateT]([])
+    while True:
+        s = observer(domain)
+        if goal(s):
+            return ExecutionResult.SUCCESS
+
+        if pi.length == 0 or simulator(domain, s, goal, pi) == ExecutionResult.FAILURE:
+            pi = look_ahead(domain, s, goal)
+            if pi is None or pi.length == 0:
+                return ExecutionResult.FAILURE
+
+        a = pi.actions.pop(0)
         performer(domain, a)
