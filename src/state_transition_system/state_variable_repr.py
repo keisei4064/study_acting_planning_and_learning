@@ -134,6 +134,12 @@ class RigidRelationSchema:
     name: RigidRelationName
     arg_ranges: tuple[frozenset[ObjectConstant], ...]
 
+    def __str__(self) -> str:
+        ranges_strs: list[str] = []
+        for arg_range in self.arg_ranges:
+            ranges_strs.append("{" + ", ".join(arg_range) + "}")
+        return f"{self.name}({', '.join(ranges_strs)})"
+
 
 class RigidRelations:
     def __init__(
@@ -168,7 +174,8 @@ class RigidRelations:
     def __str__(self) -> str:
         res: str = ""
         for schema, instances in self._rigid_relations.items():
-            res += f"{schema.name}({schema.arg_ranges}): {instances}\n"
+            instance_strs = ["(" + ", ".join(instance) + ")" for instance in instances]
+            res += f"{schema}: \n  {", ".join(instance_strs)}" + "\n"
         return res
 
     def has_rigid_relation(self, schema: RigidRelationSchema) -> bool:

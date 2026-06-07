@@ -265,7 +265,8 @@ if __name__ == "__main__":
     print(f"Robots: {dwr_domain.robots}")
     print(f"Docks: {dwr_domain.docks}")
 
-    print("rigid_relations:\n", dwr_domain.rigid_relations)
+    print("rigid_relations:")
+    print(dwr_domain.rigid_relations)
 
     # ---
     print()
