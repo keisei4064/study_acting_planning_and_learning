@@ -1,26 +1,31 @@
 import dataclasses
 
-import state_transition_system.system as stsystem
+import state_transition_system.system as stssys
+from typing import Generic, TypeVar, Callable
+
+StateT = TypeVar("StateT")
+DomainT = TypeVar("DomainT")
 
 
-@dataclasses.dataclass
-class Problem:
-    system: stsystem.StateTransitionSystem
-    initial_state: stsystem.State
+@dataclasses.dataclass(frozen=True)
+class PlanningProblem(Generic[StateT, DomainT]):
+    domain: DomainT
+    """Σ"""
+    initial_state: StateT
     """s0"""
-    goal_states: set[stsystem.State]
-    """S_g"""
+    goal_formula: Callable[[StateT], bool]
+    """g"""
 
 
-def is_solution(P: Problem, pi: stsystem.Plan) -> bool:
-    final_state = stsystem.transition_by_plan(P.initial_state, pi)
+def is_solution(P: PlanningProblem[StateT, DomainT], pi: stssys.Plan[StateT]) -> bool:
+    final_state = stssys.transition_by_plan(P.initial_state, pi)
     if final_state is None:
         return False
 
-    return final_state in P.goal_states
+    return P.goal_formula(final_state)
 
 
-def is_minimal(P: Problem, pi: stsystem.Plan) -> bool:
+def is_minimal(P: PlanningProblem[StateT, DomainT], pi: stssys.Plan[StateT]) -> bool:
     """The solution pi is minimal if no subsequence of pi is also a solution.　(p.16)"""
 
     for start_index in range(pi.length):
@@ -32,12 +37,12 @@ def is_minimal(P: Problem, pi: stsystem.Plan) -> bool:
     return True
 
 
-def is_shortest(P: Problem, pi: stsystem.Plan) -> bool:
+def is_shortest(P: PlanningProblem[StateT, DomainT], pi: stssys.Plan[StateT]) -> bool:
     """pi is shortest if there is no sol; pi' such that |pi'| < |pi|"""
     # 判定実装は分からん
     raise NotImplementedError()
 
 
-def is_optimal(P: Problem, pi: stsystem.Plan) -> bool:
+def is_optimal(P: PlanningProblem[StateT, DomainT], pi: stssys.Plan[StateT]) -> bool:
     # 判定実装は分からん
     raise NotImplementedError()
