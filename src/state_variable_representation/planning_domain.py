@@ -6,14 +6,14 @@ import state_transition_system.problem as sts_prob
 from typing import TypeAlias
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class StateVariablePlanningDomain:
     """Σ = (𝑆, 𝐴, 𝛾, cost) = (H , 𝑅, 𝑋, A) | p.22"""
 
     type_hierarchy: svr_model.TypeHierarchy
     rigid_relations: svr_model.RigidRelations
-    state_variables: tuple[svr_model.StateVariableSchema]
-    action_schemas: tuple[svr_act.ActionSchema]
+    state_variable_schemas: tuple[svr_model.StateVariableSchema, ...]
+    action_schemas: tuple[svr_act.ActionSchema, ...]
 
 
 @dataclasses.dataclass(frozen=True)

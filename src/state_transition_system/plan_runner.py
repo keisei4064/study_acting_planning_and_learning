@@ -74,7 +74,7 @@ def run_lookahead(
     look_ahead: LookAhead[DomainT, StateT],
     observer: StateObserver[DomainT, StateT],
     performer: ActionPerformer[DomainT, StateT],
-):
+) -> ExecutionResult:
     """Algorithm 2.3. : Run-Lookahead (p.26)"""
     while True:
         s = observer(domain)
@@ -102,7 +102,7 @@ def run_lazy_lookahead(
     simulator: Simulator[DomainT, StateT],
     observer: StateObserver[DomainT, StateT],
     performer: ActionPerformer[DomainT, StateT],
-):
+) -> ExecutionResult:
     """Algorithm 2.4. : Run-Lazy-Lookahead (p.27)"""
     pi = sts_model.Plan[StateT]([])
     while True:
