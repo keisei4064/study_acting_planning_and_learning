@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import NewType, Protocol, Self, TypeVar, cast
+from typing import Iterable, NewType, Protocol, Self, TypeVar, cast
 from typing import Mapping
 import logging
 import pprint
@@ -298,9 +298,11 @@ class StateVariableAssignment(InstantiableExpression):
 
 
 class StateVariableState:
+    """Imutableです"""
+
     def __init__(
         self,
-        state_variable_assignments: list[StateVariableAssignment],
+        state_variable_assignments: Iterable[StateVariableAssignment],
     ):
         """最初に登録するものが全て"""
         self._state_variable_expr_to_value: dict[StateVariableExpr, ObjectConstant] = {}
@@ -310,9 +312,23 @@ class StateVariableState:
                     f"The state variable assignments: {assignment} which are passed to StateVariableState must be ground."
                 )
 
+            if assignment.state_variable in self._state_variable_expr_to_value:
+                raise ValueError(
+                    f"The state variable {assignment.state_variable} is already in the state."
+                )
+
             self._state_variable_expr_to_value[assignment.state_variable] = cast(
                 ObjectConstant, assignment.value
             )
+
+    @classmethod
+    def _from_mapping(
+        cls,
+        mapping: Mapping[StateVariableExpr, ObjectConstant],
+    ) -> StateVariableState:
+        obj = cls.__new__(cls)
+        obj._state_variable_expr_to_value = dict(mapping)
+        return obj
 
     def __str__(self) -> str:
         res: str = ""
@@ -326,8 +342,25 @@ class StateVariableState:
     def get_value(self, state_variable: StateVariableExpr) -> ObjectConstant:
         return self._state_variable_expr_to_value[state_variable]
 
-    def set_value(self, state_variable: StateVariableExpr, value: ObjectConstant):
-        self._state_variable_expr_to_value[state_variable] = value
+    def copy_with_assignment(
+        self, assignment: StateVariableAssignment
+    ) -> StateVariableState:
+        return self.copy_with_assignments([assignment])
+
+    def copy_with_assignments(
+        self, assignments: Iterable[StateVariableAssignment]
+    ) -> StateVariableState:
+        new_state_variable_expr_to_value = self._state_variable_expr_to_value.copy()
+        for assignment in assignments:
+            if not is_ground(assignment):
+                raise ValueError(
+                    f"The state variable assignments: {assignment} which are passed to StateVariableState must be ground."
+                )
+
+            new_state_variable_expr_to_value[assignment.state_variable] = cast(
+                ObjectConstant, assignment.value
+            )
+        return StateVariableState._from_mapping(new_state_variable_expr_to_value)
 
 
 # ===

@@ -184,15 +184,11 @@ class GroundAction(stssystem.Action[stssvr.StateVariableState]):
     def transition(
         self, s: stssvr.StateVariableState
     ) -> stssvr.StateVariableState | None:
+        """p.20,21 式(2.15)"""
         if not self.is_applicable(s):
             return None
 
-        for effect in self.expr.schema.effects.effects:
-            s.set_value(
-                effect.state_variable, cast(stssvr.ObjectConstant, effect.value)
-            )
-
-        return s
+        return s.copy_with_assignments(self.expr.schema.effects.effects)
 
     @property
     def cost(self) -> float:
