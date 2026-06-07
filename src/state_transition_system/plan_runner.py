@@ -1,18 +1,29 @@
-import state_transition_system.system as stsystem
+import state_transition_system.system as stssys
+import state_transition_system.problem as stsprob
+from typing import TypeVar, Callable, TypeAlias
+
+
+StateT = TypeVar("StateT")
+DomainT = TypeVar("DomainT")
+
+
+StatePercepter: TypeAlias = Callable[[DomainT, StateT], StateT]
 
 
 def run_plan(
-    system: stsystem.StateTransitionSystem,
-    s0: stsystem.State,
-    pi: stsystem.Plan,
-    goal_states: set[stsystem.State],
+    domain: DomainT,
+    s0: StateT,
+    pi: stssys.Plan[StateT],
+    goal: stsprob.GoalFormula[StateT],
+    percepter: StatePercepter[DomainT, StateT],
 ) -> bool:
     """Algorithm 2.1."""
     s = s0
     while True:
-        # s = observe(s)
+        s = percepter(domain, s)
+
         if pi.length == 0:
-            return s in goal_states
+            return goal(s)
 
         a = pi.actions.pop(0)
         if not a.is_applicable(s):

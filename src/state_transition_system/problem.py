@@ -1,10 +1,13 @@
 import dataclasses
 
 import state_transition_system.system as stssys
-from typing import Generic, TypeVar, Callable
+from typing import Generic, TypeVar, Callable, TypeAlias
 
 StateT = TypeVar("StateT")
 DomainT = TypeVar("DomainT")
+
+
+GoalFormula: TypeAlias = Callable[[StateT], bool]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -13,7 +16,7 @@ class PlanningProblem(Generic[StateT, DomainT]):
     """Σ"""
     initial_state: StateT
     """s0"""
-    goal_formula: Callable[[StateT], bool]
+    goal_formula: GoalFormula[StateT]
     """g"""
 
 
