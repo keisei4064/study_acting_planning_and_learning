@@ -1,4 +1,4 @@
-import state_transition_system.state_transition_model as sts_model
+import state_transition_system.model as sts_model
 import state_transition_system.problem as sts_prob
 from typing import TypeVar, Callable, TypeAlias
 import enum

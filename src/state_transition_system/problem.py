@@ -1,6 +1,6 @@
 import dataclasses
 
-import state_transition_system.state_transition_model as sts_model
+import state_transition_system.model as sts_model
 from typing import Generic, TypeVar, Callable, TypeAlias
 
 StateT = TypeVar("StateT")

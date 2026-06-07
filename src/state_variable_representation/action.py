@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import state_variable_representation.model as svr_model
 import state_variable_representation.first_order_logic as svr_fol
-import state_transition_system.state_transition_model as sts_model
+import state_transition_system.model as sts_model
 import dataclasses
 import logging
 
