@@ -1,25 +1,42 @@
 import forward_state_space_search.model as fsss_model
 import state_transition_system.model as sts_model
 import state_transition_system.problem as sts_prob
-from typing import TypeAlias, Generic, TypeVar, Callable
+from typing import TypeAlias, Generic, TypeVar, Callable, Protocol
 
 DomainT = TypeVar("DomainT")
+DomainT_contra = TypeVar("DomainT_contra", contravariant=True)
 StateT = TypeVar("StateT")
 
 Frontier: TypeAlias = list[fsss_model.SearchNode[StateT]]
 Expanded: TypeAlias = list[fsss_model.SearchNode[StateT]]
 Children: TypeAlias = list[fsss_model.SearchNode[StateT]]
 
-FrontierSelector: TypeAlias = Callable[
-    [DomainT, Frontier[StateT], Expanded[StateT]], fsss_model.SearchNode[StateT]
-]
-ChildrenBuilder: TypeAlias = Callable[
-    [DomainT, fsss_model.SearchNode[StateT]], Children[StateT]
-]
-NodePruner: TypeAlias = Callable[
-    [DomainT, Children[StateT], Frontier[StateT], Expanded[StateT]],
-    tuple[Children[StateT], Frontier[StateT], Expanded[StateT]],
-]
+
+class FrontierSelector(Protocol[DomainT_contra, StateT]):
+    def __call__(
+        self,
+        domain: DomainT_contra,
+        frontier: Frontier[StateT],
+        expanded: Expanded[StateT],
+    ) -> fsss_model.SearchNode[StateT]: ...
+
+
+class ChildrenBuilder(Protocol[DomainT_contra, StateT]):
+    def __call__(
+        self,
+        domain: DomainT_contra,
+        node: fsss_model.SearchNode[StateT],
+    ) -> Children[StateT]: ...
+
+
+class NodePruner(Protocol[DomainT_contra, StateT]):
+    def __call__(
+        self,
+        domain: DomainT_contra,
+        children: Children[StateT],
+        frontier: Frontier[StateT],
+        expanded: Expanded[StateT],
+    ) -> tuple[Children[StateT], Frontier[StateT], Expanded[StateT]]: ...
 
 
 def forward_search_det(
