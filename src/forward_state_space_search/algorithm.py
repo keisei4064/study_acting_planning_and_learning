@@ -55,11 +55,11 @@ class BFSSelector(fsss_template.FrontierSelector[DomainT_contra, StateT]):
 
 def breadth_first_search(
     problem: fsss_template.sts_prob.PlanningProblem[StateT, DomainT],
-    children_builder: fsss_template.ChildrenBuilder[DomainT, StateT],
+    applicable_action_builder: fsss_template.ApplicableActionBuilder[DomainT, StateT],
 ) -> sts_model.Plan[StateT] | None:
     """Breadth-first search (p.36)"""
     return fsss_template.forward_search_det(
-        problem, BFSSelector(), children_builder, ExpandedStatePruner()
+        problem, BFSSelector(), applicable_action_builder, ExpandedStatePruner()
     )
 
 
@@ -82,12 +82,25 @@ class DFSSelector(fsss_template.FrontierSelector[DomainT_contra, StateT]):
 
 def depth_first_search(
     problem: fsss_template.sts_prob.PlanningProblem[StateT, DomainT],
-    children_builder: fsss_template.ChildrenBuilder[DomainT, StateT],
+    applicable_action_builder: fsss_template.ApplicableActionBuilder[DomainT, StateT],
 ) -> sts_model.Plan[StateT] | None:
     """Depth-first search (p.36)
 
     ただし，メモリ使用量は無駄に増えちゃう実装
     """
     return fsss_template.forward_search_det(
-        problem, DFSSelector(), children_builder, ExpandedStatePruner()
+        problem, DFSSelector(), applicable_action_builder, ExpandedStatePruner()
     )
+
+
+if __name__ == "__main__":
+    import int_domain.model as int_domain
+
+    problem = int_domain.IntPlanningProblem(
+        int_domain.IntDomain(),
+        3,
+        lambda s: s == 11,
+    )
+    action_builder = int_domain.ApplicableActionBuilder()
+    print("BFS: ", breadth_first_search(problem, action_builder))
+    print("DFS: ", depth_first_search(problem, action_builder))

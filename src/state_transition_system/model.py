@@ -26,6 +26,10 @@ class Plan(Generic[StateT]):
     """𝜋"""
 
     actions: list[Action[StateT]]
+    
+    def __str__(self) -> str:
+        action_strs = [str(a) for a in self.actions]
+        return "[" + ",".join(action_strs) + "]"
 
     @property
     def length(self) -> int:
