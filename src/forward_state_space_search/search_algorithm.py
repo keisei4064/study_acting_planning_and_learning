@@ -7,17 +7,18 @@ DomainT = TypeVar("DomainT")
 StateT = TypeVar("StateT")
 
 Frontier: TypeAlias = list[fsss_model.SearchNode[StateT]]
-Expanded: TypeAlias = set[fsss_model.SearchNode[StateT]]
+Expanded: TypeAlias = list[fsss_model.SearchNode[StateT]]
 Children: TypeAlias = list[fsss_model.SearchNode[StateT]]
 
 FrontierSelector: TypeAlias = Callable[
-    [DomainT, Frontier, Expanded], fsss_model.SearchNode[StateT]
+    [DomainT, Frontier[StateT], Expanded[StateT]], fsss_model.SearchNode[StateT]
 ]
 ChildrenBuilder: TypeAlias = Callable[
-    [DomainT, fsss_model.SearchNode[StateT]], Children
+    [DomainT, fsss_model.SearchNode[StateT]], Children[StateT]
 ]
 NodePruner: TypeAlias = Callable[
-    [DomainT, Children, Frontier, Expanded], tuple[Children, Frontier, Expanded]
+    [DomainT, Children[StateT], Frontier[StateT], Expanded[StateT]],
+    tuple[Children[StateT], Frontier[StateT], Expanded[StateT]],
 ]
 
 
@@ -25,24 +26,24 @@ def forward_search_det(
     problem: sts_prob.PlanningProblem[StateT, DomainT],
     frontier_selector: FrontierSelector[DomainT, StateT],
     children_builder: ChildrenBuilder[DomainT, StateT],
-    node_pruner: NodePruner[DomainT],
+    node_pruner: NodePruner[DomainT, StateT],
 ) -> sts_model.Plan[StateT] | None:
     """Algorithm 3.2. Forward-Search-Det (p.35)"""
     frontier: Frontier[StateT] = [
         fsss_model.SearchNode[StateT](
-            action=None,
+            action_from_parent=None,
             state=problem.initial_state,
             depth=0,
-            cost=0,
+            path_cost=0,
             parent=None,
         )
     ]
-    expanded: Expanded = set()
+    expanded: Expanded = []
 
     while len(frontier) > 0:
         selected_node = frontier_selector(problem.domain, frontier, expanded)
         frontier.remove(selected_node)
-        expanded.add(selected_node)
+        expanded.append(selected_node)
 
         if problem.goal_formula(selected_node.state):
             # プランニング完了

@@ -3,21 +3,21 @@ from __future__ import annotations
 import dataclasses
 import state_transition_system.model as sts_model
 
-from typing import Generic, TypeVar, Self
+from typing import Generic, TypeVar
 
 StateT = TypeVar("StateT")
 
 
 @dataclasses.dataclass(frozen=True)
 class SearchNode(Generic[StateT]):
-    action: sts_model.Action[StateT] | None
+    action_from_parent: sts_model.Action[StateT] | None
     state: StateT
     depth: int
-    cost: float
-    parent: Self | None
+    path_cost: float
+    parent: SearchNode[StateT] | None
     # children: tuple[Self, ...]
 
-    def is_ancestor_of(self, descendant_candidate_node: Self) -> bool:
+    def is_ancestor_of(self, descendant_candidate_node: SearchNode[StateT]) -> bool:
         """p.35"""
         if self is descendant_candidate_node.parent:
             return True
@@ -27,7 +27,7 @@ class SearchNode(Generic[StateT]):
 
         return self.is_ancestor_of(descendant_candidate_node.parent)
 
-    def is_successor_of(self, ancestor_candidate_node: Self) -> bool:
+    def is_successor_of(self, ancestor_candidate_node: SearchNode[StateT]) -> bool:
         """p.35"""
         return ancestor_candidate_node.is_ancestor_of(self)
 
@@ -39,10 +39,10 @@ class SearchNode(Generic[StateT]):
             return None
 
         return SearchNode[StateT](
-            action=action,
+            action_from_parent=action,
             state=new_state,
             depth=self.depth + 1,
-            cost=self.cost + action.cost,
+            path_cost=self.path_cost + action.cost,
             parent=self,
         )
 
@@ -50,10 +50,10 @@ class SearchNode(Generic[StateT]):
         """action の列を辿って plan を作る"""
         actions_from_goal_to_root: list[sts_model.Action[StateT]] = []
 
-        current_node: Self | None = self
+        current_node: SearchNode[StateT] | None = self
         while current_node is not None:
-            if current_node.action is not None:
-                actions_from_goal_to_root.append(current_node.action)
+            if current_node.action_from_parent is not None:
+                actions_from_goal_to_root.append(current_node.action_from_parent)
             current_node = current_node.parent
 
         return sts_model.Plan[StateT](list(reversed(actions_from_goal_to_root)))
