@@ -43,8 +43,16 @@ class TypeHierarchy:
                     % unresolved
                 )
 
-    def type_set(self, typename: TypeName) -> frozenset[ObjectConstant]:
+    def type_range(self, typename: TypeName) -> frozenset[ObjectConstant]:
         return self._type_dict[typename]
+
+    def __str__(self):
+        result = ""
+        for typename, objects in sorted(
+            self._type_dict.items(), key=lambda item: len(item[1]), reverse=True
+        ):
+            result += f"{typename}: {set(objects)}\n"
+        return result
 
 
 ObjectVariableName = NewType("ObjectVariableName", str)
@@ -175,7 +183,7 @@ class RigidRelations:
         res: str = ""
         for schema, instances in self._rigid_relations.items():
             instance_strs = ["(" + ", ".join(instance) + ")" for instance in instances]
-            res += f"{schema}: \n  {", ".join(instance_strs)}" + "\n"
+            res += f"{schema}: \n  {', '.join(instance_strs)}" + "\n"
         return res
 
     def has_rigid_relation(self, schema: RigidRelationSchema) -> bool:
@@ -377,289 +385,65 @@ class StateVariableState:
 
 
 if __name__ == "__main__":
+    """unground な state variable も表現できるか"""
+
+    type_name_objects = TypeName("Objects")
+    type_name_positions = TypeName("Positions")
+    type_name_robots = TypeName("Robots")
+    type_name_docks = TypeName("Docks")
+
+    obj_const_r1 = ObjectConstant("r1")
+    obj_const_r2 = ObjectConstant("r2")
+    obj_const_d1 = ObjectConstant("d1")
+    obj_const_d2 = ObjectConstant("d2")
+    obj_const_d3 = ObjectConstant("d3")
+
     type_hierarchy = TypeHierarchy(
         {
-            TypeName("Objects"): (
+            type_name_objects: (
                 {
-                    TypeName("Positions"),
-                    TypeName("Containers"),
-                    TypeName("Piles"),
-                    TypeName("Symbols"),
+                    type_name_positions,
                 },
                 set(),
             ),
-            TypeName("Positions"): (
+            type_name_positions: (
                 {
-                    TypeName("Robots"),
-                    TypeName("Docks"),
+                    type_name_robots,
+                    type_name_docks,
                 },
-                {
-                    ObjectConstant("nil"),
-                },
+                set(),
             ),
-            TypeName("Symbols"): (
+            type_name_robots: (
                 set(),
                 {
-                    ObjectConstant("T"),
-                    ObjectConstant("F"),
-                    ObjectConstant("nil"),
+                    obj_const_r1,
+                    obj_const_r2,
                 },
             ),
-            TypeName("Containers"): (
+            type_name_docks: (
                 set(),
                 {
-                    ObjectConstant("c1"),
-                    ObjectConstant("c2"),
-                    ObjectConstant("c3"),
-                },
-            ),
-            TypeName("Piles"): (
-                set(),
-                {
-                    ObjectConstant("p1"),
-                    ObjectConstant("p2"),
-                    ObjectConstant("p3"),
-                },
-            ),
-            TypeName("Robots"): (
-                set(),
-                {
-                    ObjectConstant("r1"),
-                    ObjectConstant("r2"),
-                },
-            ),
-            TypeName("Docks"): (
-                set(),
-                {
-                    ObjectConstant("d1"),
-                    ObjectConstant("d2"),
-                    ObjectConstant("d3"),
+                    obj_const_d1,
+                    obj_const_d2,
+                    obj_const_d3,
                 },
             ),
         }
     )
-
-    pprint.pprint(type_hierarchy._type_dict)
-    print(f"Positions: {type_hierarchy.type_set(TypeName('Positions'))}")
-    print(f"Containers: {type_hierarchy.type_set(TypeName('Containers'))}")
-    print(f"Piles: {type_hierarchy.type_set(TypeName('Piles'))}")
-    print(f"Symbols: {type_hierarchy.type_set(TypeName('Symbols'))}")
-    print(f"Robots: {type_hierarchy.type_set(TypeName('Robots'))}")
-    print(f"Docks: {type_hierarchy.type_set(TypeName('Docks'))}")
-
-    print("---")
-    # ---
-
-    rigid_rel_adjacent = RigidRelationSchema(
-        RigidRelationName("adjacent"),
-        (
-            type_hierarchy.type_set(TypeName("Docks")),
-            type_hierarchy.type_set(TypeName("Docks")),
-        ),
-    )
-    rigid_rel_at = RigidRelationSchema(
-        RigidRelationName("at"),
-        (
-            type_hierarchy.type_set(TypeName("Piles")),
-            type_hierarchy.type_set(TypeName("Docks")),
-        ),
-    )
-
-    rigid_relations = RigidRelations(
-        {
-            rigid_rel_adjacent: {
-                (ObjectConstant("d1"), ObjectConstant("d2")),
-                (ObjectConstant("d2"), ObjectConstant("d1")),
-                (ObjectConstant("d2"), ObjectConstant("d3")),
-                (ObjectConstant("d3"), ObjectConstant("d2")),
-                (ObjectConstant("d3"), ObjectConstant("d1")),
-                (ObjectConstant("d1"), ObjectConstant("d3")),
-            },
-            rigid_rel_at: {
-                (ObjectConstant("p1"), ObjectConstant("d1")),
-                (ObjectConstant("p2"), ObjectConstant("d2")),
-                (ObjectConstant("p3"), ObjectConstant("d2")),
-            },
-        }
-    )
-    print("rigid_relations:\n", rigid_relations)
-
-    print("---")
-    # ---
 
     obj_var_r = ObjectVariable(
         ObjectVariableName("r"),
-        type_hierarchy.type_set(TypeName("Robots")),
+        type_hierarchy.type_range(type_name_robots),
     )
-    obj_var_d = ObjectVariable(
-        ObjectVariableName("d"),
-        type_hierarchy.type_set(TypeName("Docks")),
-    )
-    obj_var_c = ObjectVariable(
-        ObjectVariableName("c"),
-        type_hierarchy.type_set(TypeName("Containers")),
-    )
-    obj_var_p = ObjectVariable(
-        ObjectVariableName("p"),
-        type_hierarchy.type_set(TypeName("Piles")),
-    )
-    object_variables = [obj_var_r, obj_var_d, obj_var_c, obj_var_p]
 
-    print("object_variables:")
-    pprint.pprint(object_variables)
-
-    print("---")
-    # ---
-
-    nil = ObjectConstant("nil")
-    true = ObjectConstant("T")
-    false = ObjectConstant("F")
-
-    containers = type_hierarchy.type_set(TypeName("Containers"))
-    robots = type_hierarchy.type_set(TypeName("Robots"))
-    docks = type_hierarchy.type_set(TypeName("Docks"))
-    piles = type_hierarchy.type_set(TypeName("Piles"))
-
-    state_var_schema_cargo = StateVariableSchema(
-        StateVariableName("cargo"),
-        (obj_var_r,),
-        containers | frozenset({nil}),
-    )
     state_var_schema_loc = StateVariableSchema(
         StateVariableName("loc"),
         (obj_var_r,),
-        docks,
+        type_hierarchy.type_range(type_name_docks),
     )
-    state_var_schema_occupied = StateVariableSchema(
-        StateVariableName("occupied"),
-        (obj_var_d,),
-        frozenset({true, false}),
-    )
-    state_var_schema_pile = StateVariableSchema(
-        StateVariableName("pile"),
-        (obj_var_c,),
-        piles | frozenset({nil}),
-    )
-    state_var_schema_pos = StateVariableSchema(
-        StateVariableName("pos"),
-        (obj_var_c,),
-        robots | containers | frozenset({nil}),
-    )
-    state_var_schema_top = StateVariableSchema(
-        StateVariableName("top"),
-        (obj_var_p,),
-        containers | frozenset({nil}),
-    )
-
-    state_variables = [
-        state_var_schema_cargo,
-        state_var_schema_loc,
-        state_var_schema_occupied,
-        state_var_schema_pile,
-        state_var_schema_pos,
-        state_var_schema_top,
-    ]
-
-    print("state_variables:")
-    pprint.pprint(state_variables)
-
-    # ---
-    # Example 2.4 を表現
-
-    r1 = ObjectConstant("r1")
-    r2 = ObjectConstant("r2")
-
-    d1 = ObjectConstant("d1")
-    d2 = ObjectConstant("d2")
-    d3 = ObjectConstant("d3")
-
-    c1 = ObjectConstant("c1")
-    c2 = ObjectConstant("c2")
-    c3 = ObjectConstant("c3")
-
-    p1 = ObjectConstant("p1")
-    p2 = ObjectConstant("p2")
-    p3 = ObjectConstant("p3")
-
-    s0 = StateVariableState(
-        [
-            StateVariableAssignment(
-                StateVariableExpr(state_var_schema_cargo, (r1,)),
-                nil,
-            ),
-            StateVariableAssignment(
-                StateVariableExpr(state_var_schema_cargo, (r2,)),
-                nil,
-            ),
-            StateVariableAssignment(
-                StateVariableExpr(state_var_schema_loc, (r1,)),
-                d1,
-            ),
-            StateVariableAssignment(
-                StateVariableExpr(state_var_schema_loc, (r2,)),
-                d2,
-            ),
-            StateVariableAssignment(
-                StateVariableExpr(state_var_schema_occupied, (d1,)),
-                true,
-            ),
-            StateVariableAssignment(
-                StateVariableExpr(state_var_schema_occupied, (d2,)),
-                true,
-            ),
-            StateVariableAssignment(
-                StateVariableExpr(state_var_schema_occupied, (d3,)),
-                false,
-            ),
-            StateVariableAssignment(
-                StateVariableExpr(state_var_schema_pile, (c1,)),
-                p1,
-            ),
-            StateVariableAssignment(
-                StateVariableExpr(state_var_schema_pile, (c2,)),
-                p1,
-            ),
-            StateVariableAssignment(
-                StateVariableExpr(state_var_schema_pile, (c3,)),
-                p2,
-            ),
-            StateVariableAssignment(
-                StateVariableExpr(state_var_schema_pos, (c1,)),
-                c2,
-            ),
-            StateVariableAssignment(
-                StateVariableExpr(state_var_schema_pos, (c2,)),
-                nil,
-            ),
-            StateVariableAssignment(
-                StateVariableExpr(state_var_schema_pos, (c3,)),
-                nil,
-            ),
-            StateVariableAssignment(
-                StateVariableExpr(state_var_schema_top, (p1,)),
-                c1,
-            ),
-            StateVariableAssignment(
-                StateVariableExpr(state_var_schema_top, (p2,)),
-                c3,
-            ),
-            StateVariableAssignment(
-                StateVariableExpr(state_var_schema_top, (p3,)),
-                nil,
-            ),
-        ],
-    )
-
-    print("---")
-    print("s0:")
-    print(s0)
-    # pprint.pprint(s0)
-    # for expr, value in s0.items():
-    #     print(f"{expr} = {value}")
-
-    print("---")
-    # ---
 
     ungrounded_loc = StateVariableExpr(state_var_schema_loc, (obj_var_r,))
-    print(f"ungrounded_loc: {ungrounded_loc}")
-    # ---
+
+    print("ungrounded loc: ")
+    print(ungrounded_loc)
+    pprint.pprint(ungrounded_loc)
