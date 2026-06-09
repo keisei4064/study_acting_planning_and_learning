@@ -26,6 +26,9 @@ class GoalFormula:
     def __call__(self, state: svr_model.StateVariableState) -> bool:
         return self.evaluate(state)
 
+    def __str__(self) -> str:
+        return " ∧ ".join(str(literal) for literal in self.literals)
+
 
 StateVariablePlanningProblem: TypeAlias = sts_prob.PlanningProblem[
     svr_model.StateVariableState,

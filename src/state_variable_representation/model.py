@@ -47,12 +47,12 @@ class TypeHierarchy:
         return self._type_dict[typename]
 
     def __str__(self):
-        result = ""
+        res_strs: list[str] = []
         for typename, objects in sorted(
             self._type_dict.items(), key=lambda item: len(item[1]), reverse=True
         ):
-            result += f"{typename}: {set(objects)}\n"
-        return result
+            res_strs.append(f"{typename}: {set(objects)}")
+        return "\n".join(res_strs)
 
 
 ObjectVariableName = NewType("ObjectVariableName", str)
@@ -213,6 +213,9 @@ class StateVariableSchema:
     args: tuple[ObjectVariable, ...]
     value_range: frozenset[ObjectConstant]
 
+    def __str__(self) -> str:
+        return f"{self.name}({', '.join(f'{arg.name} ∈ {set(arg.value_range)}' for arg in self.args)}) ∈ {set(self.value_range)}"
+
 
 @dataclass(frozen=True)
 class StateVariableExpr(InstantiableExpression):
@@ -346,10 +349,12 @@ class StateVariableState:
         return obj
 
     def __str__(self) -> str:
-        res: str = ""
+        res_strs: list[str] = []
         for state_variable, value in self._state_variable_expr_to_value.items():
-            res += f"{state_variable.schema.name}{state_variable.args}: {value}\n"
-        return res
+            res_strs.append(
+                f"{state_variable.schema.name}{state_variable.args}: {value}"
+            )
+        return "\n".join(res_strs)
 
     def items(self) -> Iterator[tuple[StateVariableExpr, ObjectConstant]]:
         return iter(self._state_variable_expr_to_value.items())
