@@ -4,43 +4,88 @@ import state_variable_representation.model as svr_model
 import state_variable_representation.action as svr_act
 import state_variable_representation.first_order_logic as svr_fol
 import dataclasses
-from collections.abc import Callable
-from typing import TypeAlias
+from collections.abc import Callable, Mapping
+from typing import TypeAlias, NewType
+
+
+PlanNodeId = NewType("PlanNodeId", str)
 
 
 @dataclasses.dataclass(frozen=True)
-class Node:
-    action_schema: svr_act.ActionExpr
+class PlanNode:
+    """v"""
+
+    id: PlanNodeId
 
 
 @dataclasses.dataclass(frozen=True)
-class Edge:
-    from_node: Node
-    to_node: Node
+class PlanEdge:
+    """ordering constraint"""
+
+    before: PlanNode
+    after: PlanNode
 
 
-def do_node1_preceds_node2(node1: Node, node2: Node, edges: set[Edge]) -> bool:
-    """𝑣 ≺ 𝑣′ if 𝑣 ≠ 𝑣′ and (𝑉, 𝐸) contains a path from 𝑣 to 𝑣′. (p.54)"""
-    if Edge(from_node=node1, to_node=node2) in edges:
-        return True
-    children = [edge.from_node for edge in edges if edge.to_node == node1]
-    for child in children:
-        return do_node1_preceds_node2(child, node2, edges)
-    return False
+@dataclasses.dataclass(frozen=True)
+class PlanEdges:
+    """E"""
+
+    constraints: frozenset[PlanEdge]
+
+    def children_of(self, node: PlanNode) -> frozenset[PlanNode]:
+        """指定ノードについての直接の子ノード集合を返す"""
+        return frozenset(edge.after for edge in self.constraints if edge.before == node)
+
+    def precedes(self, before: PlanNode, after: PlanNode) -> bool:
+        """before node から after node へのパスが存在するかどうかを返す
+
+        def: 𝑣 ≺ 𝑣′ if 𝑣′ = 𝑣 or (𝑉, 𝐸) contains a path from 𝑣 to 𝑣′. (p.54)
+        """
+
+        if before == after:
+            return False
+
+        visited: set[PlanNode] = set()
+        frontier: list[PlanNode] = list(self.children_of(before))
+
+        while len(frontier) > 0:
+            current = frontier.pop()
+
+            if current == after:
+                return True
+
+            if current in visited:
+                continue
+
+            visited.add(current)
+            frontier.extend(self.children_of(current))
+
+        return False
 
 
-@dataclasses.dataclass
+ActionByNode: TypeAlias = Mapping[PlanNode, svr_act.ActionExpr]
+
+
+@dataclasses.dataclass(frozen=True)
 class PartiallyOrderedPlan:
     """p.54"""
 
-    nodes: set[Node]
+    nodes: frozenset[PlanNode]
     """V"""
 
-    edges: set[Edge]
+    edges: PlanEdges
     """E"""
 
-    act: Callable[[Node], svr_act.GroundAction]
+    act: ActionByNode
     """act (must be ground)"""
+
+    def __post_init__(self):
+        # act が指すActionが全てgroundになっているか確認
+        for node, action in self.act.items():
+            if not svr_model.is_ground(action):
+                raise ValueError(
+                    f"The action {action} of the node {node} is not ground."
+                )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -50,15 +95,15 @@ class InequalityConstraint:
 
 
 class CausalLink:
-    left_node: Node
-    right_node: Node
+    left_node: PlanNode
+    right_node: PlanNode
     left_effect: svr_model.StateVariableAssignment
     right_precondition: svr_fol.StateVariableLiteralExpr
 
     def __post_init__(self):
         if (
             self.left_effect.state_variable
-            is not self.right_precondition.atom.state_variable
+            != self.right_precondition.atom.state_variable
         ):
             raise ValueError(
                 f"The state variable of the left effect must be the same as the state variable of the right precondition: {self.left_effect.state_variable} != {self.right_precondition.atom.state_variable}"
@@ -90,17 +135,20 @@ Constraint: TypeAlias = InequalityConstraint | CausalLink
 class PartialPlan:
     """p.54 def 3.10"""
 
-    nodes: set[Node]
+    nodes: frozenset[PlanNode]
     """V"""
 
-    edges: set[Edge]
+    edges: frozenset[PlanEdge]
     """E"""
 
-    act: Callable[[Node], svr_act.ActionExpr]
+    act: ActionByNode
     """act (may be unground)"""
 
-    constraints: set[Constraint]
+    constraints: frozenset[Constraint]
     """C"""
+
+
+# ---
 
 
 class Flaw:
