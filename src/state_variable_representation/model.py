@@ -339,6 +339,12 @@ class StateVariableState:
                 ObjectConstant, assignment.value
             )
 
+    def __eq__(self, other: object) -> bool:
+        """ `==` は内部の `_state_variable_expr_to_value` を比較する"""
+        if not isinstance(other, StateVariableState):
+            return NotImplemented
+        return self._state_variable_expr_to_value == other._state_variable_expr_to_value
+
     @classmethod
     def _from_mapping(
         cls,

@@ -265,4 +265,5 @@ if __name__ == "__main__":
     applicable_action_builder = svr_aab.ApplicableActionBuilder()
 
     print("BFS: ", fsss_algo.breadth_first_search(problem, applicable_action_builder))
-    # print("DFS: ", fsss_algo.depth_first_search(problem, applicable_action_builder))  # 終わらない
+    print()
+    print("DFS: ", fsss_algo.depth_first_search(problem, applicable_action_builder))  # 終わらない
