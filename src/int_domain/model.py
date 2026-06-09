@@ -34,7 +34,7 @@ class MultipleTwoAction(sts_model.Action[IntState]):
         return s * 2
 
     def __str__(self) -> str:
-        return "×2"
+        return "x2"
 
 class DivideTwoAction(sts_model.Action[IntState]):
     def is_applicable(self, s: IntState) -> bool:

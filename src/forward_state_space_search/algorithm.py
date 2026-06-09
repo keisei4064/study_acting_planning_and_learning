@@ -1,7 +1,7 @@
 import forward_state_space_search.template as fsss_template
 import forward_state_space_search.model as fsss_model
 import state_transition_system.model as sts_model
-from typing import TypeAlias, Generic, TypeVar
+from typing import TypeVar
 
 DomainT = TypeVar("DomainT")
 DomainT_contra = TypeVar("DomainT_contra", contravariant=True)
@@ -91,16 +91,3 @@ def depth_first_search(
     return fsss_template.forward_search_det(
         problem, DFSSelector(), applicable_action_builder, ExpandedStatePruner()
     )
-
-
-if __name__ == "__main__":
-    import int_domain.model as int_domain
-
-    problem = int_domain.IntPlanningProblem(
-        int_domain.IntDomain(),
-        3,
-        lambda s: s == 11,
-    )
-    action_builder = int_domain.ApplicableActionBuilder()
-    print("BFS: ", breadth_first_search(problem, action_builder))
-    print("DFS: ", depth_first_search(problem, action_builder))
