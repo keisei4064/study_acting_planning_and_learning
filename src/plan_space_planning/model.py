@@ -24,6 +24,9 @@ class PlanEdge:
     before: PlanNode
     after: PlanNode
 
+    def __str__(self) -> str:
+        return f"({self.before.id}, {self.after.id})"
+
 
 @dataclasses.dataclass(frozen=True)
 class PlanEdges:
@@ -230,6 +233,9 @@ class CausalLink:
     left: EffectRef
     right: PreconditionRef
 
+    def __str__(self) -> str:
+        return f"{self.left.node.id}.eff[{self.left.effect_id}] ---> {self.right.node.id}.pre[{self.right.precondition_id}]"
+
     def validate(self, edges: PlanEdges, action_by_node: ActionByNode) -> None:
         # 順序が指定されているべき
         if not edges.precedes(self.left.node, self.right.node):
@@ -337,7 +343,7 @@ class PartialPlan:
     nodes: frozenset[PlanNode]
     """V"""
 
-    edges: PlanEdges
+    edges: frozenset[PlanEdge]
     """E"""
 
     act: ActionByNode
@@ -346,42 +352,72 @@ class PartialPlan:
     constraints: frozenset[Constraint]
     """C"""
 
-    def is_inconsistent(self) -> bool:
-        """p.55"""
+    def __str__(self) -> str:
+        result_strs: list[str] = []
+        result_strs.append(f"V: {sorted(node.id for node in partial_plan.nodes)}")
+        result_strs.append(
+            "E: {" + ", ".join(f"{edge}" for edge in partial_plan.edges) + "}"
+        )
+
+        result_strs.append("act:")
+        for node in sorted(partial_plan.act.keys(), key=lambda n: n.id):
+            result_strs.append(f"  {node.id} = {partial_plan.act[node]}")
+        result_strs.append("C:")
+        for constraint in partial_plan.constraints:
+            result_strs.append(f"  {constraint}")
+
+        return "\n".join(result_strs)
+
+    @property
+    def plan_edges(self) -> PlanEdges:
+        return PlanEdges(self.edges)
+
+    def is_inconsistent(self) -> tuple[bool, str]:
+        """p.55
+
+        Returns:
+            tuple[bool, str]: (is_inconsistent, reason)
+        """
+        plan_edges = self.plan_edges
+
         # サイクルチェック
-        if self.edges.has_cycle():
-            return True
+        if plan_edges.has_cycle():
+            return True, "has cycle"
 
         # 自己矛盾制約チェック
         for inequality_constraint in (
             ineq for ineq in self.constraints if isinstance(ineq, InequalityConstraint)
         ):
             if inequality_constraint.is_self_contradictory():
-                return True
+                return (
+                    True,
+                    f"has self contradictory constraint: {inequality_constraint}",
+                )
 
         # 違反CausalLink制約チェック
         for causal_link in (
             cl for cl in self.constraints if isinstance(cl, CausalLink)
         ):
             # そもそも有効なのか
-            causal_link.validate(self.edges, self.act)
+            causal_link.validate(plan_edges, self.act)
 
             # violates をチェック
             for node in self.nodes:
-                if causal_link.violates(node, self.edges, self.act):
-                    return True
+                if causal_link.violates(node, plan_edges, self.act):
+                    return True, f"has violated causal link: {causal_link}"
 
         # 違反 action 引数チェック
         for action in self.act.values():
             for argument, parameter in zip(action.args, action.schema.head.parameters):
                 if not parameter.can_be_instantiated_by(argument):
-                    return True
+                    return True, f"has violated action argument: {action}"
 
         # consistent!
-        return False
+        return False, ""
 
-    def is_consistent(self) -> bool:
-        return not self.is_inconsistent()
+    def is_consistent(self) -> tuple[bool, str]:
+        result, reason = self.is_inconsistent()
+        return not result, reason
 
 
 # ---
@@ -389,4 +425,147 @@ class PartialPlan:
 if __name__ == "__main__":
     print("Example 3.11.")
 
-    # TODO
+    # --- domain ---
+
+    type_name_objects = svr_model.TypeName("Objects")
+    type_name_robots = svr_model.TypeName("Robots")
+    type_name_docks = svr_model.TypeName("Docks")
+    type_name_symbols = svr_model.TypeName("Symbols")
+
+    r1 = svr_model.ObjectConstant("r1")
+    r2 = svr_model.ObjectConstant("r2")
+    d1 = svr_model.ObjectConstant("d1")
+    d2 = svr_model.ObjectConstant("d2")
+    d3 = svr_model.ObjectConstant("d3")
+    nil = svr_model.ObjectConstant("nil")
+
+    type_hierarchy = svr_model.TypeHierarchy(
+        {
+            type_name_objects: (
+                {type_name_robots, type_name_docks, type_name_symbols},
+                set(),
+            ),
+            type_name_robots: (set(), {r1, r2}),
+            type_name_docks: (set(), {d1, d2, d3}),
+            type_name_symbols: (set(), {nil}),
+        }
+    )
+
+    robots = type_hierarchy.type_range(type_name_robots)
+    docks = type_hierarchy.type_range(type_name_docks)
+    symbols = type_hierarchy.type_range(type_name_symbols)
+
+    rigid_relations = svr_model.RigidRelations({})
+
+    # --- object variables ---
+
+    param_r = svr_model.ObjectVariable(svr_model.ObjectVariableName("r"), robots)
+    param_d = svr_model.ObjectVariable(svr_model.ObjectVariableName("d"), docks)
+    param_d_prime = svr_model.ObjectVariable(
+        svr_model.ObjectVariableName("d_prime"), docks
+    )
+
+    arg_r = svr_model.ObjectVariable(svr_model.ObjectVariableName("r"), robots)
+    arg_d = svr_model.ObjectVariable(svr_model.ObjectVariableName("d"), docks)
+
+    # --- state variables ---
+
+    state_var_loc = svr_model.StateVariableSchema(
+        svr_model.StateVariableName("loc"),
+        (param_r,),
+        docks,
+    )
+    state_var_occupied = svr_model.StateVariableSchema(
+        svr_model.StateVariableName("occupied"),
+        (param_d,),
+        robots | symbols,
+    )
+
+    def assign(
+        schema: svr_model.StateVariableSchema,
+        args: tuple[svr_model.ObjectTerm, ...],
+        value: svr_model.ObjectTerm,
+    ) -> svr_model.StateVariableAssignment:
+        return svr_model.StateVariableAssignment(
+            state_variable=svr_model.StateVariableExpr(schema, args),
+            value=value,
+        )
+
+    def lit(
+        assignment: svr_model.StateVariableAssignment,
+        negated: bool = False,
+    ) -> svr_fol.StateVariableLiteralExpr:
+        return svr_fol.StateVariableLiteralExpr(assignment, negated)
+
+    # --- action schema ---
+
+    action_schema_move = svr_act.ActionSchema(
+        head=svr_act.Head(
+            name="move",
+            parameters=(param_r, param_d, param_d_prime),
+        ),
+        preconditions=svr_act.Preconditions(
+            literals=(
+                lit(assign(state_var_loc, (param_r,), param_d)),
+                lit(assign(state_var_occupied, (param_d_prime,), nil)),
+            )
+        ),
+        effects=svr_act.Effects(
+            effects=(
+                assign(state_var_loc, (param_r,), param_d_prime),
+                assign(state_var_occupied, (param_d,), nil),
+                assign(state_var_occupied, (param_d_prime,), param_r),
+            )
+        ),
+    )
+
+    # === partial plan ===
+
+    v1 = PlanNode(PlanNodeId("v1"))
+    v2 = PlanNode(PlanNodeId("v2"))
+
+    #   act(v1) = move(r, d2, d)
+    #   act(v2) = move(r1, d1, d2)
+    act_v1 = svr_act.ActionExpr(
+        schema=action_schema_move,
+        args=(arg_r, d2, arg_d),
+    )
+    act_v2 = svr_act.ActionExpr(
+        schema=action_schema_move,
+        args=(r1, d1, d2),
+    )
+
+    partial_plan = PartialPlan(
+        nodes=frozenset({v1, v2}),
+        edges=frozenset({PlanEdge(v1, v2)}),
+        act={
+            v1: act_v1,
+            v2: act_v2,
+        },
+        constraints=frozenset(
+            {
+                CausalLink(
+                    left=EffectRef(node=v1, effect_id=EffectIndex(1)),
+                    right=PreconditionRef(
+                        node=v2, precondition_id=PreconditionIndex(1)
+                    ),
+                )
+            }
+        ),
+    )
+
+    # 表示 ---
+
+    print("\nDomain:")
+    print("Type hierarchy:")
+    print(type_hierarchy)
+    print("\nRigid relations:")
+    print(rigid_relations)
+    print("\nAction schema:")
+    print(action_schema_move)
+
+    print("\nPartial plan:")
+    print(partial_plan)
+
+    print("\nConsistency check:")
+    print(f"  is_consistent = {partial_plan.is_consistent()}")
