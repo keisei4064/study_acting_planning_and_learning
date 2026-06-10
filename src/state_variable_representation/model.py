@@ -66,6 +66,7 @@ class ObjectVariable:
     value_range: frozenset[ObjectConstant]
 
     def can_be_instantiated_by(self, value: ObjectTerm) -> bool:
+        """変数の値域に value が含まれるか判定"""
         if isinstance(value, ObjectVariable):
             return value.value_range.issubset(self.value_range)
         return value in self.value_range
@@ -340,7 +341,7 @@ class StateVariableState:
             )
 
     def __eq__(self, other: object) -> bool:
-        """ `==` は内部の `_state_variable_expr_to_value` を比較する"""
+        """`==` は内部の `_state_variable_expr_to_value` を比較する"""
         if not isinstance(other, StateVariableState):
             return NotImplemented
         return self._state_variable_expr_to_value == other._state_variable_expr_to_value

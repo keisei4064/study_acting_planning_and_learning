@@ -1,5 +1,4 @@
 import state_transition_system.model as sts_model
-import state_variable_representation.action as svr_act
 import state_variable_representation.model as svr_model
 import state_variable_representation.action as svr_act
 import state_variable_representation.first_order_logic as svr_fol
@@ -62,6 +61,43 @@ class PlanEdges:
 
         return False
 
+    def has_cycle(self) -> bool:
+        """サイクルを持っているか"""
+        visited: set[PlanNode] = set()
+        visiting: set[PlanNode] = set()
+
+        def visit(node: PlanNode) -> bool:
+            if node in visiting:
+                # 2回目の訪問 ➾ サイクル
+                return True
+
+            if node in visited:
+                # 検査済み ➾ 枝切り
+                return False
+
+            # 未確定ノード
+            visiting.add(node)
+
+            # 全分岐を探索
+            for child in self.children_of(node):
+                if visit(child):
+                    return True
+
+            # この node を始点としたパスは検査完了
+            visiting.remove(node)
+            visited.add(node)
+
+            return False
+
+        # 全て順序制約における始点ノードを検査
+        for node in [edge.before for edge in self.constraints]:
+            if visit(node):
+                # サイクル発見
+                return True
+
+        # サイクル見つからず
+        return False
+
 
 ActionByNode: TypeAlias = Mapping[PlanNode, svr_act.ActionExpr]
 
@@ -92,6 +128,10 @@ class PartiallyOrderedPlan:
 class InequalityConstraint:
     left: svr_model.ObjectVariable
     right: svr_model.ObjectTerm
+
+    def is_self_contradictory(self) -> bool:
+        """自己矛盾かどうか"""
+        return self.left == self.right
 
 
 # Causal Link ---
@@ -190,7 +230,7 @@ class CausalLink:
     left: EffectRef
     right: PreconditionRef
 
-    def validate(self, edges: PlanEdges, action_by_node: ActionByNode):
+    def validate(self, edges: PlanEdges, action_by_node: ActionByNode) -> None:
         # 順序が指定されているべき
         if not edges.precedes(self.left.node, self.right.node):
             raise ValueError(
@@ -245,7 +285,7 @@ class CausalLink:
 
     def violates(
         self, dubious_node: PlanNode, edges: PlanEdges, action_by_node: ActionByNode
-    ):
+    ) -> bool:
         """p.55"""
 
         # 前提: 𝜈1 ≺ 𝜈3 ≺ 𝜈2
@@ -297,7 +337,7 @@ class PartialPlan:
     nodes: frozenset[PlanNode]
     """V"""
 
-    edges: frozenset[PlanEdge]
+    edges: PlanEdges
     """E"""
 
     act: ActionByNode
@@ -306,13 +346,47 @@ class PartialPlan:
     constraints: frozenset[Constraint]
     """C"""
 
+    def is_inconsistent(self) -> bool:
+        """p.55"""
+        # サイクルチェック
+        if self.edges.has_cycle():
+            return True
+
+        # 自己矛盾制約チェック
+        for inequality_constraint in (
+            ineq for ineq in self.constraints if isinstance(ineq, InequalityConstraint)
+        ):
+            if inequality_constraint.is_self_contradictory():
+                return True
+
+        # 違反CausalLink制約チェック
+        for causal_link in (
+            cl for cl in self.constraints if isinstance(cl, CausalLink)
+        ):
+            # そもそも有効なのか
+            causal_link.validate(self.edges, self.act)
+
+            # violates をチェック
+            for node in self.nodes:
+                if causal_link.violates(node, self.edges, self.act):
+                    return True
+
+        # 違反 action 引数チェック
+        for action in self.act.values():
+            for argument, parameter in zip(action.args, action.schema.head.parameters):
+                if not parameter.can_be_instantiated_by(argument):
+                    return True
+
+        # consistent!
+        return False
+
+    def is_consistent(self) -> bool:
+        return not self.is_inconsistent()
+
 
 # ---
 
+if __name__ == "__main__":
+    print("Example 3.11.")
 
-class Flaw:
-    pass
-
-
-class Resolver:
-    pass
+    # TODO
