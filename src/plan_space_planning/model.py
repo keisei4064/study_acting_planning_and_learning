@@ -216,7 +216,15 @@ class CausalLink:
                 f"The right precondition must be a StateVariableLiteralExpr: {right_precondition}"
             )
 
-        # left effect と right precondition が同一の変数を指しているか
+        # left effect と right precondition は同じ StateVariable を参照しているか
+        if left_effect.state_variable != right_precondition.atom.state_variable:
+            raise ValueError(
+                "The left effect and right precondition must refer to the same "
+                f"state variable: {left_effect.state_variable} != "
+                f"{right_precondition.atom.state_variable}"
+            )
+
+        # left effect が right precondition を満たす構造になっているか
         assign_value = left_effect.value  # b in x ← b
         if right_precondition.negated:
             # x ≠ b' for some b' ≠ b
